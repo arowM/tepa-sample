@@ -1,5 +1,5 @@
 import { Elm } from "../App.elm";
-import * as backend from "../../backend/src/interface";
+import * as backend from "./interface";
 
 const app = Elm.App.init({
   node: document.body.appendChild(document.createElement("div")),

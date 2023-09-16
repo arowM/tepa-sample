@@ -48,13 +48,13 @@ import Form.Decoder as FD
 import Json.Decode as JD
 import Json.Encode as JE exposing (Value)
 import Page.Chat.Message as Message exposing (ActiveUser, Message)
-import Tepa exposing (PortRequest, PortResponse, Promise)
+import Tepa exposing (Promise)
 
 
-port page_chat_newMessage_request : PortRequest a
+port page_chat_newMessage_request : Value -> Cmd msg
 
 
-port page_chat_newMessage_response : PortResponse a
+port page_chat_newMessage_response : (Value -> msg) -> Sub msg
 
 
 
