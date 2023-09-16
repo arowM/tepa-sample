@@ -1,0 +1,26 @@
+{
+    "extends": "@tsconfig/strictest/tsconfig.json",
+    "compilerOptions": {
+        "target": "ES2018",
+        "module": "es2022",
+        "lib": [
+            "es2018",
+            "dom"
+        ],
+        "outDir": "dist",
+        "rootDir": "src",
+        "alwaysStrict": true,
+        "declaration": true,
+        "inlineSourceMap": true,
+        "inlineSources": true,
+        "noImplicitAny": true,
+        "noImplicitThis": true,
+        "noFallthroughCasesInSwitch": false,
+        "strictNullChecks": true,
+        "strictPropertyInitialization": false,
+        "moduleResolution": "node"
+    },
+    "include": [
+        "src/**/*"
+    ]
+}

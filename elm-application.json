@@ -4,16 +4,13 @@
     "version": "1.0.0",
     "exposed-modules": [
         "App",
-        "App.FetchProfile",
         "App.Path",
         "App.Session",
         "App.ZIndex",
-        "Page.HotFound",
+        "Page.NotFound",
         "Page.Home",
         "Page.Home.EditAccount",
         "Page.Chat",
-        "Page.Chat.ChatServer",
-        "Page.Chat.NewMessage",
         "Page.Login",
         "Page.Login.Login",
         "Widget.Toast"

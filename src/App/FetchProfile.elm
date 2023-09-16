@@ -51,6 +51,7 @@ request =
         |> Tepa.map response
 
 
+{-| -}
 endpointUrl : String
 endpointUrl =
     Url.absolute
@@ -60,6 +61,7 @@ endpointUrl =
         []
 
 
+{-| -}
 method : String
 method =
     "GET"
