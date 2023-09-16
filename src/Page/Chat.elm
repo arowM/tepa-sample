@@ -91,8 +91,7 @@ init session =
 {-| -}
 leave : Promise Memory (Maybe Session)
 leave =
-    ChatServer.close
-        |> Tepa.andThen (\_ -> Tepa.currentState)
+    Tepa.currentState
         |> Tepa.map .session
         |> Tepa.map Just
 

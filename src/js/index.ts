@@ -1,8 +1,7 @@
-// @ts-ignore
 import { Elm } from "../App.elm";
 import * as backend from "../../backend/src/interface";
 
-const app: Elm = Elm.App.init({
+const app = Elm.App.init({
   node: document.body.appendChild(document.createElement("div")),
   flags: {},
 });
@@ -38,9 +37,23 @@ app.ports["app_dom_overwrite_value_request"].subscribe(
 );
 
 let ws: WebSocket;
+let wsId: string;
+app.ports["page_chat_chatServer_events_cancel"].subscribe(
+  (req: { id: string }) => {
+    console.log("canceled");
+    try {
+      if (wsId === req.id) {
+        ws.close();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  },
+);
 app.ports["page_chat_chatServer_events_request"].subscribe(
   (req: { id: string }) => {
     try {
+      wsId = req.id;
       const protocol = window.location.protocol === "https" ? "wss" : "ws";
       ws = new WebSocket(`${protocol}://${window.location.host}/ws/`);
       ws.addEventListener("message", (event) => {
@@ -91,30 +104,6 @@ app.ports["page_chat_chatServer_events_request"].subscribe(
     } catch (e) {
       console.error(e);
       app.ports["page_chat_chatServer_events_response"].send({
-        id: req.id,
-        body: {
-          result: "FatalError",
-        },
-      });
-    }
-  },
-);
-
-app.ports["page_chat_chatServer_close_request"].subscribe(
-  (req: { id: string }) => {
-    try {
-      ws.close();
-      ws.addEventListener("close", () => {
-        app.ports["page_chat_chatServer_close_response"].send({
-          id: req.id,
-          body: {
-            result: "Success",
-          },
-        });
-      });
-    } catch (e) {
-      console.error(e);
-      app.ports["page_chat_chatServer_close_response"].send({
         id: req.id,
         body: {
           result: "FatalError",

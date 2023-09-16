@@ -1,13 +1,11 @@
 port module Page.Chat.ChatServer exposing
     ( connect, Error(..)
-    , close, CloseResult(..)
     , portNames
     )
 
 {-|
 
 @docs connect, Error
-@docs close, CloseResult
 
 @docs portNames
 
@@ -26,18 +24,16 @@ port page_chat_chatServer_events_request : PortRequest a
 port page_chat_chatServer_events_response : PortResponse a
 
 
-port page_chat_chatServer_close_request : PortRequest a
-
-
-port page_chat_chatServer_close_response : PortResponse a
+port page_chat_chatServer_events_cancel : PortRequest a
 
 
 {-| -}
 connect : Promise m (Stream (Result Error Message))
 connect =
-    Tepa.portStream
+    Tepa.customPortStream
         { request = page_chat_chatServer_events_request
         , response = page_chat_chatServer_events_response
+        , cancel = page_chat_chatServer_events_cancel
         , portName = portNames.connect
         , requestBody = JE.null
         }
@@ -56,11 +52,9 @@ connect =
 
 portNames :
     { connect : String
-    , close : String
     }
 portNames =
     { connect = "connect"
-    , close = "close"
     }
 
 
@@ -155,29 +149,3 @@ type Error
     = LoginRequired
     | Disconnected
     | FatalError
-
-
-{-| -}
-close : Promise m CloseResult
-close =
-    Tepa.portRequest
-        { request = page_chat_chatServer_close_request
-        , response = page_chat_chatServer_close_response
-        , portName = portNames.close
-        , requestBody = JE.null
-        }
-        |> Tepa.map
-            (\v ->
-                case JD.decodeValue (JD.field "result" JD.string) v of
-                    Ok "Success" ->
-                        CloseSuccess
-
-                    _ ->
-                        CloseFailed
-            )
-
-
-{-| -}
-type CloseResult
-    = CloseSuccess
-    | CloseFailed

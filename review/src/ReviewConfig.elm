@@ -11,15 +11,16 @@ when inside the directory containing this file.
 
 -}
 
-import Review.Rule as Rule exposing (Rule)
 import NoAlways
 import NoDebug.Log
 import NoDebug.TodoOrToString
+import NoDuplicatePorts
 import NoExposingEverything
 import NoImportingEverything
 import NoMissingTypeAnnotation
 import NoMissingTypeExpose
 import NoUnoptimizedRecursion
+import NoUnsafePorts
 import NoUnused.CustomTypeConstructorArgs
 import NoUnused.CustomTypeConstructors
 import NoUnused.Dependencies
@@ -28,9 +29,8 @@ import NoUnused.Modules
 import NoUnused.Parameters
 import NoUnused.Patterns
 import NoUnused.Variables
-import NoDuplicatePorts
-import NoUnsafePorts
 import NoUnusedPorts
+import Review.Rule as Rule exposing (Rule)
 import Simplify
 
 
