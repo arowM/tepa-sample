@@ -1,0 +1,23 @@
+name: Backend test
+on:
+  - push
+  - pull_request
+jobs:
+  Backend-Test:
+    name: Backend test
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.pull_request.title, '[skip ci]') }}
+    env:
+      BACKEND_ROOT_DIRECTORY: ./backend
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+      - name: Install npm
+        run: npm install
+        working-directory: ${{ env.BACKEND_ROOT_DIRECTORY }}
+      - name: Run test
+        run: npm test
+        working-directory: ${{ env.BACKEND_ROOT_DIRECTORY }}
