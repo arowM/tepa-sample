@@ -48,15 +48,6 @@ import Widget.Toast as Toast
 
 
 
--- IDs
-
-
-newMessageFormBodyId : String
-newMessageFormBodyId =
-    pagePrefix ++ "newMessageFormBody"
-
-
-
 -- Memory
 
 
@@ -237,7 +228,7 @@ type alias NewMessageFormMemory =
 
 
 newMessageFormView : ViewContext NewMessageFormMemory -> Html
-newMessageFormView { state, setKey, values } =
+newMessageFormView { state, setKey, values, layerId } =
     let
         errors =
             NewMessage.toFormErrors values
@@ -249,7 +240,10 @@ newMessageFormView { state, setKey, values } =
         ]
         [ Html.node "textarea"
             [ localClass "newMessageForm_control_body"
-            , Mixin.id newMessageFormBodyId
+            , domId
+                { layerId = layerId
+                , key = NewMessage.keys.body
+                }
             , setKey NewMessage.keys.body
             , Mixin.boolAttribute "aria-invalid" <|
                 state.showError
@@ -421,12 +415,9 @@ newMessageFormProcedure =
                                     case response of
                                         NewMessage.GoodResponse resp ->
                                             [ modifyNewMessageForm <| \m -> { m | isBusy = False, showError = False }
-                                            , Tepa.setValue NewMessage.keys.body ""
-                                            , RawDom.overwriteValue newMessageFormBodyId ""
-                                                |> Tepa.void
+                                            , setDomValue NewMessage.keys.body ""
                                             , Tepa.modify <|
                                                 \m -> { m | messages = resp :: m.messages }
-                                            , Tepa.setValue NewMessage.keys.body ""
                                             , Tepa.lazy <| \_ -> newMessageFormProcedure
                                             ]
 
@@ -876,6 +867,22 @@ expectSubmitMessageButtonIsBusy props isBusy markup =
 
 
 
+-- Helper promises
+
+
+setDomValue : String -> String -> Promise m ()
+setDomValue key value =
+    Tepa.bind Tepa.currentLayerId <|
+        \layerId ->
+            [ RawDom.overwriteValue
+                (domIdString { layerId = layerId, key = key })
+                value
+                |> Tepa.void
+            , Tepa.setValue key value
+            ]
+
+
+
 -- Helper functions
 
 
@@ -887,6 +894,16 @@ localClass name =
 localClassSelector : String -> Selector.Selector
 localClassSelector name =
     Selector.class (pagePrefix ++ name)
+
+
+domId : { layerId : String, key : String } -> Mixin
+domId props =
+    Mixin.id (domIdString props)
+
+
+domIdString : { layerId : String, key : String } -> String
+domIdString { layerId, key } =
+    layerId ++ "--" ++ key
 
 
 pagePrefix : String
