@@ -8,31 +8,33 @@ const app = Elm.App.init({
 
 app.ports["app_dom_overwrite_value_request"].subscribe(
   (req: { id: string; body: { id: string; value: string } }) => {
-    try {
-      const target: HTMLElement | null = document.getElementById(req.body.id);
-      if (target === null) {
-        app.ports["app_dom_overwrite_value_response"].send({
-          id: req.id,
-          body: {
-            result: "ElementNotFound",
-          },
-        });
-        return;
+    requestAnimationFrame(() => {
+      try {
+        const target: HTMLElement | null = document.getElementById(req.body.id);
+        if (target === null) {
+          app.ports["app_dom_overwrite_value_response"].send({
+            id: req.id,
+            body: {
+              result: "ElementNotFound",
+            },
+          });
+          return;
+        }
+        // Just ignore for elements without "value" property.
+        if ("value" in target) {
+          target.value = req.body.value;
+          app.ports["app_dom_overwrite_value_response"].send({
+            id: req.id,
+            body: {
+              result: "Success",
+            },
+          });
+          return;
+        }
+      } catch (e) {
+        console.error(e);
       }
-      // Just ignore for elements without "value" property.
-      if ("value" in target) {
-        target.value = req.body.value;
-        app.ports["app_dom_overwrite_value_response"].send({
-          id: req.id,
-          body: {
-            result: "Success",
-          },
-        });
-        return;
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    });
   },
 );
 
