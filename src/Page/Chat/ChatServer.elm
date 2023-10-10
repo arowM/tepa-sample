@@ -30,7 +30,7 @@ port page_chat_chatServer_events_cancel : PortRequest a
 {-| -}
 connect : Promise m (Stream (Result Error Message))
 connect =
-    Tepa.customPortStream
+    Tepa.portStream
         { request = page_chat_chatServer_events_request
         , response = page_chat_chatServer_events_response
         , cancel = page_chat_chatServer_events_cancel

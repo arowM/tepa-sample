@@ -1,31 +1,35 @@
 module Page.Chat exposing
     ( Memory
+    , MemoryBody
     , ScenarioProps
     , ScenarioSet
     , init
     , leave
-    , procedure
+    , onLoad
     , scenario
     , view
     )
 
-{-| Home page.
+{-| Chat page.
 
 @docs Memory
+@docs MemoryBody
 @docs ScenarioProps
 @docs ScenarioSet
 @docs init
 @docs leave
-@docs procedure
+@docs onLoad
 @docs scenario
 @docs view
 
 -}
 
+import App.Bucket exposing (Bucket)
 import App.Dom as RawDom
+import App.Flags exposing (Flags)
 import App.Path as Path
-import App.Session exposing (Session)
-import AppUrl exposing (AppUrl)
+import App.Session exposing (Profile)
+import AppUrl
 import Dict
 import Expect exposing (Expectation)
 import Json.Encode as JE exposing (Value)
@@ -33,7 +37,7 @@ import Page.Chat.ChatServer as ChatServer
 import Page.Chat.Message as Message exposing (ActiveUser, Message)
 import Page.Chat.NewMessage as NewMessage
 import String.Multiline exposing (here)
-import Tepa exposing (Layer, NavKey, Promise, ViewContext)
+import Tepa exposing (Document, Layer, Promise, ViewContext)
 import Tepa.Html as Html exposing (Html)
 import Tepa.HtmlSelector as Selector
 import Tepa.Mixin as Mixin exposing (Mixin)
@@ -51,40 +55,54 @@ import Widget.Toast as Toast
 -- Memory
 
 
-{-| -}
+{-| Page memory.
+
+    - link: Pointer to the external memory.
+    - body: Memory area for this page.
+
+-}
 type alias Memory =
-    { session : Session
-    , toast : Toast.Memory
-    , activeUsers : List ActiveUser
+    { link :
+        { profile : Profile
+        , toast : Toast.Memory
+        }
+    , body : MemoryBody
+    }
+
+
+modifyBody : (body -> body) -> Promise { link : link, body : body } ()
+modifyBody f =
+    Tepa.modify <|
+        \m ->
+            { m | body = f m.body }
+
+
+{-| -}
+type alias MemoryBody =
+    { activeUsers : List ActiveUser
     , messages : List Message -- reversed
     , newMessageForm : NewMessageFormMemory
     }
 
 
 {-| -}
-init : Session -> Promise m Memory
-init session =
+init : Promise m MemoryBody
+init =
     Tepa.succeed
-        (\toast ->
-            { session = session
-            , toast = toast
-            , activeUsers = []
-            , messages = []
-            , newMessageForm =
-                { isBusy = False
-                , showError = False
-                }
+        { activeUsers = []
+        , messages = []
+        , newMessageForm =
+            { isBusy = False
+            , showError = False
             }
-        )
-        |> Tepa.sync Toast.init
+        }
 
 
-{-| -}
-leave : Promise Memory (Maybe Session)
+{-| Procedure for releasing resources, saving scroll position, and so on.
+-}
+leave : Promise Memory ()
 leave =
-    Tepa.currentState
-        |> Tepa.map .session
-        |> Tepa.map Just
+    Tepa.none
 
 
 
@@ -92,30 +110,41 @@ leave =
 
 
 {-| -}
-view : Layer Memory -> Html
-view =
+view : Flags -> Layer Memory -> Document
+view _ =
     Tepa.layerView <|
         \context ->
-            Html.div
-                [ localClass "page"
+            { title = "Sample App | Chat"
+            , body =
+                [ let
+                    bodyContext =
+                        Tepa.mapViewContext .body context
+
+                    linkContext =
+                        Tepa.mapViewContext .link context
+                  in
+                  Html.div
+                    [ localClass "page"
+                    ]
+                    [ Header.view
+                        (localClass "header")
+                    , Html.div
+                        [ localClass "body"
+                        ]
+                        [ activeUsersView bodyContext.state.activeUsers
+                        , messageFieldView bodyContext.state.messages
+                        , Toast.view
+                            (Tepa.mapViewContext .toast linkContext)
+                        ]
+                    , Html.div
+                        [ localClass "footer"
+                        ]
+                        [ newMessageFormView
+                            (Tepa.mapViewContext .newMessageForm bodyContext)
+                        ]
+                    ]
                 ]
-                [ Header.view
-                    (localClass "header")
-                , Html.div
-                    [ localClass "body"
-                    ]
-                    [ activeUsersView context.state.activeUsers
-                    , messageFieldView context.state.messages
-                    , Toast.view
-                        (Tepa.mapViewContext .toast context)
-                    ]
-                , Html.div
-                    [ localClass "footer"
-                    ]
-                    [ newMessageFormView
-                        (Tepa.mapViewContext .newMessageForm context)
-                    ]
-                ]
+            }
 
 
 activeUsersView : List ActiveUser -> Html
@@ -281,27 +310,12 @@ newMessageFormView { state, setKey, values, layerId } =
 
 
 -- Procedures
-
-
-type alias Bucket =
-    { key : NavKey
-    , requestPath : AppUrl
-    }
-
-
-
 -- -- Initialization
 
 
 {-| -}
-procedure : NavKey -> AppUrl -> Promise Memory ()
-procedure key url =
-    let
-        bucket =
-            { key = key
-            , requestPath = url
-            }
-    in
+onLoad : Bucket -> Promise Memory ()
+onLoad bucket =
     -- Main Procedures
     Tepa.syncAll
         [ chatEventHandler bucket
@@ -317,7 +331,7 @@ chatEventHandler bucket =
                 (\event ->
                     case event of
                         Ok (Message.UserEntered param) ->
-                            [ Tepa.modify <|
+                            [ modifyBody <|
                                 \m ->
                                     { m
                                         | activeUsers = param.activeUsers
@@ -326,7 +340,7 @@ chatEventHandler bucket =
                             ]
 
                         Ok (Message.UserLeft param) ->
-                            [ Tepa.modify <|
+                            [ modifyBody <|
                                 \m ->
                                     { m
                                         | activeUsers = param.activeUsers
@@ -335,7 +349,7 @@ chatEventHandler bucket =
                             ]
 
                         Ok (Message.UserMessage param) ->
-                            [ Tepa.modify <|
+                            [ modifyBody <|
                                 \m ->
                                     { m
                                         | messages = Message.UserMessage param :: m.messages
@@ -381,7 +395,7 @@ newMessageFormProcedure =
     -- IGNORE TCO
     let
         modifyNewMessageForm f =
-            Tepa.modify <|
+            modifyBody <|
                 \m ->
                     { m
                         | newMessageForm = f m.newMessageForm
@@ -416,7 +430,7 @@ newMessageFormProcedure =
                                         NewMessage.GoodResponse resp ->
                                             [ modifyNewMessageForm <| \m -> { m | isBusy = False, showError = False }
                                             , setDomValue NewMessage.keys.body ""
-                                            , Tepa.modify <|
+                                            , modifyBody <|
                                                 \m -> { m | messages = resp :: m.messages }
                                             , Tepa.lazy <| \_ -> newMessageFormProcedure
                                             ]
@@ -444,12 +458,11 @@ newMessageFormProcedure =
 runToastPromise :
     Promise Toast.Memory a
     -> Promise Memory a
-runToastPromise prom =
+runToastPromise =
     Tepa.liftMemory
-        { get = .toast
-        , set = \toast m -> { m | toast = toast }
+        { get = .link >> .toast
+        , set = \toast ({ link } as m) -> { m | link = { link | toast = toast } }
         }
-        prom
 
 
 
@@ -458,62 +471,62 @@ runToastPromise prom =
 
 {-| -}
 type alias ScenarioSet m =
-    { layer : Layer m -> Maybe (Layer Memory)
+    { layer : Layer m -> Maybe (Layer MemoryBody)
     , changeNewMessageFormBody :
         { value : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , clickSubmitMessage :
-        Scenario.Markup -> Scenario m
+        Scenario.Markup -> Scenario Flags m
     , receiveChatServerEvent :
         Value
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , receiveNewMessageResp :
         Value
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectAvailable :
-        Scenario.Markup -> Scenario m
+        Scenario.Markup -> Scenario Flags m
     , expectRequestHandshake :
-        Scenario.Markup -> Scenario m
+        Scenario.Markup -> Scenario Flags m
     , expectActiveUsers :
         { users : List ActiveUser
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectNewMessageBodyIsCleared :
         Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectNumOfMessageFieldItems :
         Int
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectUserEnteredMessage :
         { user : ActiveUser
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectUserMessage :
         { user : ActiveUser
         , value : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectUserLeftMessage :
         { user : ActiveUser
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectSubmitMessageButtonIsBusy :
-        Bool -> Scenario.Markup -> Scenario m
+        Bool -> Scenario.Markup -> Scenario Flags m
     }
 
 
 {-| -}
 type alias ScenarioProps m =
-    { querySelf : Layer m -> Maybe (Layer Memory)
+    { querySelf : Layer m -> Maybe (Layer MemoryBody)
     , session : Scenario.Session
     }
 
@@ -538,7 +551,7 @@ scenario props =
     }
 
 
-changeNewMessageFormBody : ScenarioProps m -> { value : String } -> Scenario.Markup -> Scenario m
+changeNewMessageFormBody : ScenarioProps m -> { value : String } -> Scenario.Markup -> Scenario Flags m
 changeNewMessageFormBody props { value } markup =
     Scenario.userOperation props.session
         markup
@@ -550,7 +563,7 @@ changeNewMessageFormBody props { value } markup =
         }
 
 
-clickSubmitMessage : ScenarioProps m -> Scenario.Markup -> Scenario m
+clickSubmitMessage : ScenarioProps m -> Scenario.Markup -> Scenario Flags m
 clickSubmitMessage props markup =
     Scenario.userOperation props.session
         markup
@@ -569,7 +582,7 @@ receiveChatServerEvent :
     ScenarioProps m
     -> Value
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 receiveChatServerEvent props payload markup =
     let
         event =
@@ -595,7 +608,7 @@ receiveNewMessageResp :
     ScenarioProps m
     -> Value
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 receiveNewMessageResp props event markup =
     Scenario.portResponse props.session
         markup
@@ -610,7 +623,7 @@ receiveNewMessageResp props event markup =
         }
 
 
-receiveOverwriteValueResponse : ScenarioProps m -> Scenario.Markup -> Scenario m
+receiveOverwriteValueResponse : ScenarioProps m -> Scenario.Markup -> Scenario Flags m
 receiveOverwriteValueResponse props markup =
     Scenario.portResponse props.session
         markup
@@ -628,7 +641,7 @@ receiveOverwriteValueResponse props markup =
         }
 
 
-expectRequestHandshake : ScenarioProps m -> Scenario.Markup -> Scenario m
+expectRequestHandshake : ScenarioProps m -> Scenario.Markup -> Scenario Flags m
 expectRequestHandshake props markup =
     Scenario.expectPortRequest props.session
         markup
@@ -642,7 +655,7 @@ expectRequestHandshake props markup =
         }
 
 
-expectAvailable : ScenarioProps m -> Scenario.Markup -> Scenario m
+expectAvailable : ScenarioProps m -> Scenario.Markup -> Scenario Flags m
 expectAvailable props markup =
     Scenario.expectMemory props.session
         markup
@@ -657,7 +670,7 @@ expectActiveUsers :
         { users : List ActiveUser
         }
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectActiveUsers props { users } markup =
     Scenario.expectAppView props.session
         markup
@@ -708,7 +721,7 @@ exactMatch expects multi =
 expectNewMessageBodyIsCleared :
     ScenarioProps m
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectNewMessageBodyIsCleared props markup =
     Scenario.sequence
         [ receiveOverwriteValueResponse props
@@ -725,7 +738,7 @@ expectNewMessageBody :
     ScenarioProps m
     -> { value : String }
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectNewMessageBody props { value } markup =
     Scenario.expectValues props.session
         markup
@@ -741,7 +754,7 @@ expectNumOfMessageFieldItems :
     ScenarioProps m
     -> Int
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectNumOfMessageFieldItems props n markup =
     Scenario.expectAppView props.session
         markup
@@ -761,7 +774,7 @@ expectUserEnteredMessage :
         { user : ActiveUser
         }
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectUserEnteredMessage props { user } markup =
     Scenario.expectAppView props.session
         markup
@@ -791,7 +804,7 @@ expectUserLeftMessage :
         { user : ActiveUser
         }
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectUserLeftMessage props { user } markup =
     Scenario.expectAppView props.session
         markup
@@ -822,7 +835,7 @@ expectUserMessage :
         , value : String
         }
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectUserMessage props { user, value } markup =
     Scenario.expectAppView props.session
         markup
@@ -850,7 +863,7 @@ expectSubmitMessageButtonIsBusy :
     ScenarioProps m
     -> Bool
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectSubmitMessageButtonIsBusy props isBusy markup =
     Scenario.expectAppView props.session
         markup

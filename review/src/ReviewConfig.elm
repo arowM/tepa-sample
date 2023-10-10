@@ -77,4 +77,4 @@ config =
             [ "tests/VerifyExample.elm"
             ]
     ]
-        |> List.map (Rule.ignoreErrorsForDirectories [ "../src" ])
+        |> List.map (Rule.ignoreErrorsForDirectories [ "../src", "lib" ])

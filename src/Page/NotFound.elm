@@ -1,49 +1,71 @@
 module Page.NotFound exposing
     ( Memory
+    , MemoryLink
+    , MemoryBody
     , init
     , leave
-    , procedure
+    , onLoad
     , view
     )
 
 {-| Not found page.
 
 @docs Memory
+@docs MemoryLink
+@docs MemoryBody
 @docs init
 @docs leave
-@docs procedure
+@docs onLoad
 @docs view
 
 -}
 
+import App.Bucket exposing (Bucket)
+import App.Flags exposing (Flags)
 import App.Path as Path
-import App.Session exposing (Session)
-import AppUrl exposing (AppUrl)
+import AppUrl
 import Dict
-import Tepa exposing (Layer, NavKey, Promise)
-import Tepa.Html as Html exposing (Html)
+import Tepa exposing (Document, Layer, Promise)
+import Tepa.Html as Html
 import Tepa.Mixin as Mixin exposing (Mixin)
+import Widget.Toast as Toast
 
 
-{-| -}
+{-| Page memory.
+
+    - link: Pointer to the external memory.
+    - body: Memory area for this page.
+
+-}
 type alias Memory =
-    { msession : Maybe Session
+    { link : MemoryLink
+    , body : MemoryBody
     }
 
 
 {-| -}
-init : Maybe Session -> Promise m Memory
-init msession =
-    Tepa.succeed
-        { msession = msession
-        }
+type alias MemoryLink =
+    { toast : Toast.Memory
+    }
 
 
 {-| -}
-leave : Promise Memory (Maybe Session)
+type alias MemoryBody =
+    {}
+
+
+{-| -}
+init : Promise m MemoryBody
+init =
+    Tepa.succeed
+        {}
+
+
+{-| Procedure for releasing resources, saving scroll position, and so on.
+-}
+leave : Promise Memory ()
 leave =
-    Tepa.currentState
-        |> Tepa.map .msession
+    Tepa.none
 
 
 
@@ -51,32 +73,36 @@ leave =
 
 
 {-| -}
-view : Layer Memory -> Html
-view =
+view : Flags -> Layer Memory -> Document
+view _ =
     Tepa.layerView <|
         \_ ->
-            Html.div
-                [ localClass "page"
-                ]
+            { title = "Sample App | Not Found"
+            , body =
                 [ Html.div
-                    [ localClass "mainMessage"
+                    [ localClass "page"
                     ]
-                    [ Html.text "Page Not Found."
-                    ]
-                , Html.a
-                    [ Mixin.attribute "href" <|
-                        AppUrl.toString
-                            { path =
-                                [ Path.prefix
-                                ]
-                            , queryParameters = Dict.empty
-                            , fragment = Nothing
-                            }
-                    , localClass "homeLink"
-                    ]
-                    [ Html.text "Home"
+                    [ Html.div
+                        [ localClass "mainMessage"
+                        ]
+                        [ Html.text "Page Not Found."
+                        ]
+                    , Html.a
+                        [ Mixin.attribute "href" <|
+                            AppUrl.toString
+                                { path =
+                                    [ Path.prefix
+                                    ]
+                                , queryParameters = Dict.empty
+                                , fragment = Nothing
+                                }
+                        , localClass "homeLink"
+                        ]
+                        [ Html.text "Home"
+                        ]
                     ]
                 ]
+            }
 
 
 
@@ -84,8 +110,8 @@ view =
 
 
 {-| -}
-procedure : NavKey -> AppUrl -> Promise Memory ()
-procedure _ _ =
+onLoad : Bucket -> Promise Memory ()
+onLoad _ =
     Tepa.none
 
 

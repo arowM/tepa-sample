@@ -10,6 +10,7 @@ module Scenario exposing
 -}
 
 import App exposing (Memory)
+import App.Flags exposing (Flags)
 import App.Session as Session
 import DebugToJson
 import Dict
@@ -33,50 +34,38 @@ import Widget.Toast as Toast
 
 {-| Scenario document server.
 -}
-main : Tepa.Program ScenarioMemory
+main : Tepa.Program Flags ScenarioMemory
 main =
     Tepa.application
-        { init = init
-        , procedure =
+        { init =
+            \_ ->
+                Tepa.bindAndThen (Tepa.newLayer ()) <|
+                    \page ->
+                        Tepa.succeed
+                            ( {}
+                            , { page = page
+                              }
+                            )
+        , onLoad =
             \_ _ _ ->
-                Tepa.bind (Tepa.newLayer ()) <|
-                    \layer ->
-                        [ Tepa.modify <|
-                            \m ->
-                                { m | page = Just layer }
-                        , Tepa.void <|
-                            Tepa.onLayer
-                                { get = .page
-                                , set = \l m -> { m | page = Just l }
-                                }
-                            <|
-                                Tepa.sequence
-                                    [ Tepa.neverResolved
-                                    ]
-                        ]
-        , view =
-            \{ page } ->
-                case page of
-                    Nothing ->
-                        { title = "Loading"
-                        , body = [ Html.text "Loading..." ]
-                        }
-
-                    Just layer ->
-                        documentView layer
+                Tepa.none
         , onUrlRequest = \_ _ _ -> Tepa.none
         , onUrlChange = \_ _ _ -> Tepa.none
+        , view =
+            \_ { page } -> documentView page
+        , initView = loadingView
         }
 
 
-type alias ScenarioMemory =
-    { page : Maybe (Layer ())
+loadingView : Document
+loadingView =
+    { title = "User Scenario"
+    , body = [ Html.text "Loading..." ]
     }
 
 
-init : ScenarioMemory
-init =
-    { page = Nothing
+type alias ScenarioMemory =
+    { page : Layer ()
     }
 
 
@@ -233,7 +222,7 @@ onWarunasubiKunMainSession =
 
 
 type alias Section =
-    Scenario.Section Memory
+    Scenario.Section Flags Memory
 
 
 {-| -}
@@ -282,6 +271,14 @@ introduction1 config =
                 }
             , flags = JE.object []
             }
+        , onSakuraChanMainSession.app.receiveRandomLuckyHay
+            { value = Session.LuckyHayAlfalfa
+            }
+            (markup """
+            Client receives a random response for lucky hay: Alfalfa
+            """
+                |> setLogLevelDev config
+            )
         , let
             responseMeta =
                 { url = "https://example.com/api/profile"
@@ -548,7 +545,7 @@ introduction1 config =
                 List.length
                     >> Expect.equal 0
             }
-        , onSakuraChanMainSession.login.toast.expectErrorMessage
+        , onSakuraChanMainSession.toast.expectErrorMessage
             { message = "Network error, please check your network and try again."
             }
             (markup "A toast popup appears: \"Network error, please try again.\"")
@@ -562,11 +559,11 @@ introduction1_sub1 config =
     { title = "Introduction Scenario #1-0"
     , dependency = Scenario.RunAfter (introduction1 config).title
     , content =
-        [ onSakuraChanMainSession.login.toast.closeErrorsByMessage
+        [ onSakuraChanMainSession.toast.closeErrorsByMessage
             { message = "Network error, please check your network and try again."
             }
             (markup "Click the close button on the popup.")
-        , onSakuraChanMainSession.login.toast.expectDisappearingErrorMessage
+        , onSakuraChanMainSession.toast.expectDisappearingErrorMessage
             { message = "Network error, please check your network and try again."
             }
             (markup "The popup begins to disappear.")
@@ -577,7 +574,7 @@ introduction1_sub1 config =
                 |> setParam "duration" (String.fromInt Toast.toastFadeOutDuration)
             )
             Toast.toastFadeOutDuration
-        , onSakuraChanMainSession.login.toast.expectNoMessages
+        , onSakuraChanMainSession.toast.expectNoMessages
             (markup "No toast popups now.")
         ]
     }
@@ -595,7 +592,7 @@ introduction1_1 config =
                 |> setParam "timeout" (String.fromInt Toast.toastTimeout)
             )
             Toast.toastTimeout
-        , onSakuraChanMainSession.login.toast.expectDisappearingErrorMessage
+        , onSakuraChanMainSession.toast.expectDisappearingErrorMessage
             { message = "Network error, please check your network and try again."
             }
             (markup "The popup begins to disappear.")
@@ -606,7 +603,7 @@ introduction1_1 config =
                 |> setParam "duration" (String.fromInt Toast.toastFadeOutDuration)
             )
             Toast.toastFadeOutDuration
-        , onSakuraChanMainSession.login.toast.expectNoMessages
+        , onSakuraChanMainSession.toast.expectNoMessages
             (markup "No toast popups now.")
         , userComment sakuraChan "Try again."
         , onSakuraChanMainSession.login.clickSubmitLogin
@@ -682,12 +679,6 @@ introduction1_1 config =
                 |> setParam "responseMeta"
                     (ppr responseMeta)
                 |> setParam "responseBody" responseBody
-                |> setLogLevelDev config
-            )
-        , onSakuraChanMainSession.login.receiveRandomLuckyHay
-            { value = Session.LuckyHayAlfalfa
-            }
-            (markup "Client receives random value for lucky hay: Alfalfa"
                 |> setLogLevelDev config
             )
         , onSakuraChanMainSession.home.expectAvailable
@@ -847,6 +838,12 @@ pageHomeCase1 config =
                 }
             , flags = JE.object []
             }
+        , onSakuraChanSecondSession.app.receiveRandomLuckyHay
+            { value = Session.LuckyHayTimothy
+            }
+            (markup "Client receives random value for lucky hay: Timothy"
+                |> setLogLevelDev config
+            )
         , let
             responseMeta =
                 { url = "https://example.com/api/profile"
@@ -898,14 +895,6 @@ pageHomeCase1 config =
                 |> setParam "responseMeta"
                     (ppr responseMeta)
                 |> setParam "responseBody" responseBody
-                |> setLogLevelDev config
-            )
-        , onSakuraChanSecondSession.app.receiveRandomLuckyHay
-            { value = Session.LuckyHayTimothy
-            }
-            (markup """
-            Client receives a random response for lucky hay: Timothy
-            """
                 |> setLogLevelDev config
             )
         , let
@@ -1047,6 +1036,14 @@ pageHomeCase2 config =
                 }
             , flags = JE.object []
             }
+        , onWarunasubiKunMainSession.app.receiveRandomLuckyHay
+            { value = Session.LuckyHayTimothy
+            }
+            (markup """
+            Client receives random value for lucky hay: Timothy
+            """
+                |> setLogLevelDev config
+            )
         , let
             responseMeta =
                 { url = "https://example.com/api/profile"
@@ -1189,14 +1186,6 @@ pageHomeCase2 config =
                 |> setParam "responseMeta"
                     (ppr responseMeta)
                 |> setParam "responseBody" responseBody
-                |> setLogLevelDev config
-            )
-        , onWarunasubiKunMainSession.login.receiveRandomLuckyHay
-            { value = Session.LuckyHayTimothy
-            }
-            (markup """
-            Client receives random value for lucky hay: Timothy
-            """
                 |> setLogLevelDev config
             )
         , onWarunasubiKunMainSession.chat.expectAvailable
@@ -1611,6 +1600,14 @@ pageHomeCase2 config =
                 }
             , flags = JE.object []
             }
+        , onWarunasubiKunMainSession.app.receiveRandomLuckyHay
+            { value = Session.LuckyHayOrchard
+            }
+            (markup """
+            Client receives random value for lucky hay: Orchard
+            """
+                |> setLogLevelDev config
+            )
         , let
             responseMeta =
                 { url = "https://example.com/api/profile"
@@ -1662,14 +1659,6 @@ pageHomeCase2 config =
                 |> setParam "responseMeta"
                     (ppr responseMeta)
                 |> setParam "responseBody" responseBody
-                |> setLogLevelDev config
-            )
-        , onWarunasubiKunMainSession.app.receiveRandomLuckyHay
-            { value = Session.LuckyHayOrchard
-            }
-            (markup """
-            Client receives random value for lucky hay: Orchard
-            """
                 |> setLogLevelDev config
             )
         , onWarunasubiKunMainSession.chat.expectAvailable

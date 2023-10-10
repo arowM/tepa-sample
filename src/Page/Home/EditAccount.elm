@@ -47,6 +47,7 @@ If you are not familiar with the concept of _form decoding_, see [blog post](htt
 
 -}
 
+import AppUrl
 import Dict exposing (Dict)
 import Form.Decoder as FD
 import Json.Decode as JD
@@ -54,7 +55,6 @@ import Json.Decode.Pipeline as JDP
 import Json.Encode as JE
 import Tepa exposing (Promise)
 import Tepa.Http as Http
-import Url.Builder as Url
 
 
 
@@ -96,11 +96,14 @@ method =
 {-| -}
 endpointUrl : String
 endpointUrl =
-    Url.absolute
-        [ "api"
-        , "edit-account"
-        ]
-        []
+    AppUrl.toString
+        { path =
+            [ "api"
+            , "edit-account"
+            ]
+        , queryParameters = Dict.empty
+        , fragment = Nothing
+        }
 
 
 

@@ -1,9 +1,10 @@
 module Page.Login exposing
     ( Memory
+    , MemoryBody
     , ScenarioSet
     , init
     , leave
-    , procedure
+    , onLoad
     , scenario
     , view
     )
@@ -11,29 +12,30 @@ module Page.Login exposing
 {-| Login page.
 
 @docs Memory
+@docs MemoryBody
 @docs ScenarioSet
 @docs init
 @docs leave
-@docs procedure
+@docs onLoad
 @docs scenario
 @docs view
 
 -}
 
+import App.Bucket exposing (Bucket)
+import App.Flags exposing (Flags)
 import App.Path as Path
-import App.Session as Session exposing (Session)
-import AppUrl exposing (AppUrl)
+import App.Session exposing (Profile)
 import Dict
 import Expect
 import Json.Encode exposing (Value)
 import Page.Login.Login as Login
-import Tepa exposing (Layer, NavKey, Promise, ViewContext)
+import Tepa exposing (Document, Layer, Promise, ViewContext)
 import Tepa.Html as Html exposing (Html)
 import Tepa.HtmlSelector as Selector
 import Tepa.Http as Http
 import Tepa.Mixin as Mixin exposing (Mixin)
 import Tepa.Navigation as Nav
-import Tepa.Random as Random
 import Tepa.Scenario as Scenario exposing (Scenario)
 import Tepa.Stream as Stream
 import Test.Html.Event as HtmlEvent
@@ -42,32 +44,54 @@ import Test.Html.Query as Query
 import Widget.Toast as Toast
 
 
-{-| -}
+{-| Page memory.
+
+    - link: Pointer to the external memory.
+    - body: Memory area for this page.
+
+-}
 type alias Memory =
-    { msession : Maybe Session
-    , toast : Toast.Memory
-    , loginForm : LoginFormMemory
+    { link :
+        { mprofile : Maybe Profile
+        , toast : Toast.Memory
+        }
+    , body : MemoryBody
+    }
+
+
+modifyLink : (link -> link) -> Promise { link : link, body : body } ()
+modifyLink f =
+    Tepa.modify <|
+        \m ->
+            { m | link = f m.link }
+
+
+modifyBody : (body -> body) -> Promise { link : link, body : body } ()
+modifyBody f =
+    Tepa.modify <|
+        \m ->
+            { m | body = f m.body }
+
+
+{-| -}
+type alias MemoryBody =
+    { loginForm : LoginFormMemory
     }
 
 
 {-| -}
-init : Maybe Session -> Promise m Memory
-init msession =
+init : Promise m MemoryBody
+init =
     Tepa.succeed
-        (\toast ->
-            { loginForm = initLoginForm
-            , msession = msession
-            , toast = toast
-            }
-        )
-        |> Tepa.sync Toast.init
+        { loginForm = initLoginForm
+        }
 
 
-{-| -}
-leave : Promise Memory (Maybe Session)
+{-| Procedure for releasing resources, saving scroll position, and so on.
+-}
+leave : Promise Memory ()
 leave =
-    Tepa.currentState
-        |> Tepa.map .msession
+    Tepa.none
 
 
 
@@ -75,18 +99,29 @@ leave =
 
 
 {-| -}
-view : Layer Memory -> Html
-view =
+view : Flags -> Layer Memory -> Document
+view _ =
     Tepa.layerView <|
         \context ->
-            Html.div
-                [ localClass "page"
+            { title = "Sample App | Login"
+            , body =
+                [ let
+                    bodyContext =
+                        Tepa.mapViewContext .body context
+
+                    linkContext =
+                        Tepa.mapViewContext .link context
+                  in
+                  Html.div
+                    [ localClass "page"
+                    ]
+                    [ loginFormView
+                        (Tepa.mapViewContext .loginForm bodyContext)
+                    , Toast.view
+                        (Tepa.mapViewContext .toast linkContext)
+                    ]
                 ]
-                [ loginFormView
-                    (Tepa.mapViewContext .loginForm context)
-                , Toast.view
-                    (Tepa.mapViewContext .toast context)
-                ]
+            }
 
 
 
@@ -238,27 +273,12 @@ keys =
 
 
 -- Procedures
-
-
-type alias Bucket =
-    { key : NavKey
-    , requestPath : AppUrl
-    }
-
-
-
 -- -- Initialization
 
 
 {-| -}
-procedure : NavKey -> AppUrl -> Promise Memory ()
-procedure key url =
-    let
-        bucket =
-            { key = key
-            , requestPath = url
-            }
-    in
+onLoad : Bucket -> Promise Memory ()
+onLoad bucket =
     -- Main Procedures
     Tepa.syncAll
         [ loginFormProcedure bucket
@@ -270,7 +290,7 @@ loginFormProcedure bucket =
     -- IGNORE TCO
     let
         modifyLoginForm f =
-            Tepa.modify <|
+            modifyBody <|
                 \m -> { m | loginForm = f m.loginForm }
     in
     Tepa.sequence
@@ -362,26 +382,23 @@ loginFormProcedure bucket =
                                         ]
 
                                     Login.GoodResponse resp ->
-                                        [ Tepa.bind (Random.request Session.randomLuckyHay) <|
-                                            \luckyHay ->
-                                                [ Tepa.modify <|
-                                                    \m ->
-                                                        { m
-                                                            | msession =
-                                                                Just
-                                                                    { profile = resp.profile
-                                                                    , luckyHay = luckyHay
-                                                                    }
-                                                            , loginForm =
-                                                                let
-                                                                    loginForm =
-                                                                        m.loginForm
-                                                                in
-                                                                { loginForm
-                                                                    | isBusy = False
-                                                                }
+                                        [ modifyLink <|
+                                            \m ->
+                                                { m
+                                                    | mprofile = Just resp.profile
+                                                }
+                                        , modifyBody <|
+                                            \m ->
+                                                { m
+                                                    | loginForm =
+                                                        let
+                                                            loginForm =
+                                                                m.loginForm
+                                                        in
+                                                        { loginForm
+                                                            | isBusy = False
                                                         }
-                                                ]
+                                                }
                                         , Nav.pushPath bucket.key
                                             (bucket.requestPath.queryParameters
                                                 |> Dict.get "back"
@@ -407,12 +424,11 @@ loginFormProcedure bucket =
 runToastPromise :
     Promise Toast.Memory a
     -> Promise Memory a
-runToastPromise prom =
+runToastPromise =
     Tepa.liftMemory
-        { get = .toast
-        , set = \toast m -> { m | toast = toast }
+        { get = .link >> .toast
+        , set = \toast ({ link } as m) -> { m | link = { link | toast = toast } }
         }
-        prom
 
 
 
@@ -421,42 +437,36 @@ runToastPromise prom =
 
 {-| -}
 type alias ScenarioSet m =
-    { layer : Layer m -> Maybe (Layer Memory)
+    { layer : Layer m -> Maybe (Layer MemoryBody)
     , changeLoginId :
         { value : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , changeLoginPass :
         { value : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , clickSubmitLogin :
-        Scenario.Markup -> Scenario m
+        Scenario.Markup -> Scenario Flags m
     , receiveLoginResp :
         (Value -> Maybe ( Http.Metadata, String ))
         -> Scenario.Markup
-        -> Scenario m
-    , receiveRandomLuckyHay :
-        { value : Session.LuckyHay
-        }
-        -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectAvailable :
-        Scenario.Markup -> Scenario m
+        Scenario.Markup -> Scenario Flags m
     , expectLoginFormShowNoErrors :
-        Scenario.Markup -> Scenario m
+        Scenario.Markup -> Scenario Flags m
     , expectLoginFormShowError :
         { error : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectLoginButtonIsBusy :
-        Bool -> Scenario.Markup -> Scenario m
+        Bool -> Scenario.Markup -> Scenario Flags m
     , expectRequestLogin :
-        Value -> Scenario.Markup -> Scenario m
-    , toast : Toast.ScenarioSet m
+        Value -> Scenario.Markup -> Scenario Flags m
     , loginEndpoint :
         { method : String
         , url : String
@@ -465,7 +475,7 @@ type alias ScenarioSet m =
 
 
 type alias ScenarioProps m =
-    { querySelf : Layer m -> Maybe (Layer Memory)
+    { querySelf : Layer m -> Maybe (Layer MemoryBody)
     , session : Scenario.Session
     }
 
@@ -478,19 +488,11 @@ scenario props =
     , changeLoginPass = changeLoginPass props
     , clickSubmitLogin = clickSubmitLogin props
     , receiveLoginResp = receiveLoginResp props
-    , receiveRandomLuckyHay = receiveRandomLuckyHay props
     , expectAvailable = expectAvailable props
     , expectRequestLogin = expectRequestLogin props
     , expectLoginFormShowNoErrors = expectLoginFormShowNoErrors props
     , expectLoginFormShowError = expectLoginFormShowError props
     , expectLoginButtonIsBusy = expectLoginButtonIsBusy props
-    , toast =
-        Toast.scenario
-            { querySelf =
-                props.querySelf
-                    |> Scenario.mapLayer .toast
-            , session = props.session
-            }
     , loginEndpoint =
         { method = Login.method
         , url = Login.endpointUrl
@@ -498,7 +500,7 @@ scenario props =
     }
 
 
-changeLoginId : ScenarioProps m -> { value : String } -> Scenario.Markup -> Scenario m
+changeLoginId : ScenarioProps m -> { value : String } -> Scenario.Markup -> Scenario Flags m
 changeLoginId props { value } markup =
     Scenario.userOperation props.session
         markup
@@ -510,7 +512,7 @@ changeLoginId props { value } markup =
         }
 
 
-changeLoginPass : ScenarioProps m -> { value : String } -> Scenario.Markup -> Scenario m
+changeLoginPass : ScenarioProps m -> { value : String } -> Scenario.Markup -> Scenario Flags m
 changeLoginPass props { value } markup =
     Scenario.userOperation props.session
         markup
@@ -522,7 +524,7 @@ changeLoginPass props { value } markup =
         }
 
 
-clickSubmitLogin : ScenarioProps m -> Scenario.Markup -> Scenario m
+clickSubmitLogin : ScenarioProps m -> Scenario.Markup -> Scenario Flags m
 clickSubmitLogin props markup =
     Scenario.userOperation props.session
         markup
@@ -541,7 +543,7 @@ receiveLoginResp :
     ScenarioProps m
     -> (Value -> Maybe ( Http.Metadata, String ))
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 receiveLoginResp props toResponse markup =
     Scenario.httpResponse props.session
         markup
@@ -561,21 +563,7 @@ receiveLoginResp props toResponse markup =
         }
 
 
-receiveRandomLuckyHay :
-    ScenarioProps m
-    -> { value : Session.LuckyHay }
-    -> Scenario.Markup
-    -> Scenario m
-receiveRandomLuckyHay props { value } markup =
-    Scenario.randomResponse props.session
-        markup
-        { layer = props.querySelf
-        , spec = Session.randomLuckyHay
-        , response = value
-        }
-
-
-expectRequestLogin : ScenarioProps m -> Value -> Scenario.Markup -> Scenario m
+expectRequestLogin : ScenarioProps m -> Value -> Scenario.Markup -> Scenario Flags m
 expectRequestLogin props requestBody markup =
     Scenario.expectHttpRequest props.session
         markup
@@ -596,7 +584,7 @@ expectRequestLogin props requestBody markup =
         }
 
 
-expectLoginFormShowNoErrors : ScenarioProps m -> Scenario.Markup -> Scenario m
+expectLoginFormShowNoErrors : ScenarioProps m -> Scenario.Markup -> Scenario Flags m
 expectLoginFormShowNoErrors props markup =
     Scenario.expectAppView props.session
         markup
@@ -613,7 +601,7 @@ expectLoginFormShowNoErrors props markup =
         }
 
 
-expectAvailable : ScenarioProps m -> Scenario.Markup -> Scenario m
+expectAvailable : ScenarioProps m -> Scenario.Markup -> Scenario Flags m
 expectAvailable props markup =
     Scenario.expectMemory props.session
         markup
@@ -622,7 +610,7 @@ expectAvailable props markup =
         }
 
 
-expectLoginFormShowError : ScenarioProps m -> { error : String } -> Scenario.Markup -> Scenario m
+expectLoginFormShowError : ScenarioProps m -> { error : String } -> Scenario.Markup -> Scenario Flags m
 expectLoginFormShowError props { error } markup =
     Scenario.expectAppView props.session
         markup
@@ -644,7 +632,7 @@ expectLoginButtonIsBusy :
     ScenarioProps m
     -> Bool
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectLoginButtonIsBusy props isBusy markup =
     Scenario.expectAppView props.session
         markup

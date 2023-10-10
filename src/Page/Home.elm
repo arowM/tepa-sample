@@ -1,11 +1,12 @@
 module Page.Home exposing
     ( Memory
+    , MemoryBody
     , ClockMemory
     , ScenarioProps
     , ScenarioSet
     , init
     , leave
-    , procedure
+    , onLoad
     , scenario
     , view
     )
@@ -13,25 +14,28 @@ module Page.Home exposing
 {-| Home page.
 
 @docs Memory
+@docs MemoryBody
 @docs ClockMemory
 @docs ScenarioProps
 @docs ScenarioSet
 @docs init
 @docs leave
-@docs procedure
+@docs onLoad
 @docs scenario
 @docs view
 
 -}
 
+import App.Bucket exposing (Bucket)
+import App.Flags exposing (Flags)
 import App.Path as Path
-import App.Session as Session exposing (Session)
-import AppUrl exposing (AppUrl)
+import App.Session as Session exposing (LuckyHay, Profile)
+import AppUrl
 import Dict
 import Expect
 import Json.Encode exposing (Value)
 import Page.Home.EditAccount as EditAccount
-import Tepa exposing (Layer, NavKey, Promise, ViewContext)
+import Tepa exposing (Document, Layer, Promise, ViewContext)
 import Tepa.Html as Html exposing (Html)
 import Tepa.HtmlSelector as Selector
 import Tepa.Http as Http
@@ -46,11 +50,39 @@ import Widget.Header as Header
 import Widget.Toast as Toast
 
 
-{-| -}
+{-| Page memory.
+
+    - link: Pointer to the external memory.
+    - body: Memory area for this page.
+
+-}
 type alias Memory =
-    { session : Session
-    , toast : Toast.Memory
-    , clock : ClockMemory
+    { link :
+        { profile : Profile
+        , luckyHay : LuckyHay
+        , toast : Toast.Memory
+        }
+    , body : MemoryBody
+    }
+
+
+modifyLink : (link -> link) -> Promise { link : link, body : body } ()
+modifyLink f =
+    Tepa.modify <|
+        \m ->
+            { m | link = f m.link }
+
+
+modifyBody : (body -> body) -> Promise { link : link, body : body } ()
+modifyBody f =
+    Tepa.modify <|
+        \m ->
+            { m | body = f m.body }
+
+
+{-| -}
+type alias MemoryBody =
+    { clock : ClockMemory
     , editAccountForm : EditAccountFormMemory
     }
 
@@ -63,13 +95,11 @@ type alias ClockMemory =
 
 
 {-| -}
-init : Session -> Promise m Memory
-init session =
+init : Promise m MemoryBody
+init =
     Tepa.succeed
-        (\toast now zone ->
-            { session = session
-            , toast = toast
-            , clock =
+        (\now zone ->
+            { clock =
                 { currentTime = now
                 , zone = zone
                 }
@@ -83,17 +113,15 @@ init session =
                 }
             }
         )
-        |> Tepa.sync Toast.init
         |> Tepa.sync Time.now
         |> Tepa.sync Time.here
 
 
-{-| -}
-leave : Promise Memory (Maybe Session)
+{-| Procedure for releasing resources, saving scroll position, and so on.
+-}
+leave : Promise Memory ()
 leave =
-    Tepa.currentState
-        |> Tepa.map .session
-        |> Tepa.map Just
+    Tepa.none
 
 
 
@@ -101,85 +129,96 @@ leave =
 
 
 {-| -}
-view : Layer Memory -> Html
-view =
+view : Flags -> Layer Memory -> Document
+view _ =
     Tepa.layerView <|
         \context ->
-            Html.div
-                [ localClass "page"
-                ]
-                [ Header.view
-                    (localClass "header")
-                , Html.div
-                    [ localClass "top"
+            { title = "Sample App | Home"
+            , body =
+                [ let
+                    bodyContext =
+                        Tepa.mapViewContext .body context
+
+                    linkContext =
+                        Tepa.mapViewContext .link context
+                  in
+                  Html.div
+                    [ localClass "page"
                     ]
-                    [ clockView (Tepa.mapViewContext .clock context)
+                    [ Header.view
+                        (localClass "header")
                     , Html.div
-                        [ localClass "greetingArea"
+                        [ localClass "top"
                         ]
-                        [ Html.div
-                            [ localClass "greetingArea_greeting"
-                            ]
-                            [ Html.span
-                                [ localClass "greetingArea_greeting_text"
-                                ]
-                                [ Html.text "Hi, "
-                                ]
-                            , Html.span
-                                [ localClass "greetingArea_greeting_name"
-                                ]
-                                [ Html.text context.state.session.profile.name
-                                ]
-                            , Html.span
-                                [ localClass "greetingArea_greeting_text"
-                                ]
-                                [ Html.text "!"
-                                ]
-                            ]
+                        [ clockView (Tepa.mapViewContext .clock bodyContext)
                         , Html.div
-                            [ localClass "greetingArea_luckyHay"
+                            [ localClass "greetingArea"
                             ]
-                            [ Html.span
-                                [ localClass "greetingArea_luckyHay_text"
+                            [ Html.div
+                                [ localClass "greetingArea_greeting"
                                 ]
-                                [ Html.text "Your lucky grass hay for today: "
+                                [ Html.span
+                                    [ localClass "greetingArea_greeting_text"
+                                    ]
+                                    [ Html.text "Hi, "
+                                    ]
+                                , Html.span
+                                    [ localClass "greetingArea_greeting_name"
+                                    ]
+                                    [ Html.text linkContext.state.profile.name
+                                    ]
+                                , Html.span
+                                    [ localClass "greetingArea_greeting_text"
+                                    ]
+                                    [ Html.text "!"
+                                    ]
                                 ]
-                            , Html.span
-                                [ localClass "greetingArea_luckyHay_value"
+                            , Html.div
+                                [ localClass "greetingArea_luckyHay"
                                 ]
-                                [ displayLuckyHay context.state.session.luckyHay
-                                    |> Html.text
+                                [ Html.span
+                                    [ localClass "greetingArea_luckyHay_text"
+                                    ]
+                                    [ Html.text "Your lucky grass hay for today: "
+                                    ]
+                                , Html.span
+                                    [ localClass "greetingArea_luckyHay_value"
+                                    ]
+                                    [ displayLuckyHay linkContext.state.luckyHay
+                                        |> Html.text
+                                    ]
                                 ]
                             ]
                         ]
-                    ]
-                , Html.div
-                    [ localClass "body"
-                    ]
-                    [ editAccountFormView (Tepa.mapViewContext .editAccountForm context)
                     , Html.div
-                        [ localClass "dashboard_links"
+                        [ localClass "body"
                         ]
-                        [ Html.a
-                            [ localClass "dashboard_links_linkButton-chat"
-                            , Mixin.attribute "href"
-                                (AppUrl.toString
-                                    { path =
-                                        [ Path.prefix
-                                        , "chat"
-                                        ]
-                                    , queryParameters = Dict.empty
-                                    , fragment = Nothing
-                                    }
-                                )
+                        [ editAccountFormView (Tepa.mapViewContext .editAccountForm bodyContext)
+                        , Html.div
+                            [ localClass "dashboard_links"
                             ]
-                            [ Html.text "Start Chat"
+                            [ Html.a
+                                [ localClass "dashboard_links_linkButton-chat"
+                                , Mixin.attribute "href"
+                                    (AppUrl.toString
+                                        { path =
+                                            [ Path.prefix
+                                            , "chat"
+                                            ]
+                                        , queryParameters = Dict.empty
+                                        , fragment = Nothing
+                                        }
+                                    )
+                                ]
+                                [ Html.text "Start Chat"
+                                ]
                             ]
+                        , Toast.view
+                            (Tepa.mapViewContext .toast linkContext)
                         ]
-                    , Toast.view
-                        (Tepa.mapViewContext .toast context)
                     ]
                 ]
+            }
 
 
 {-| Stringify LuckyHay for display.
@@ -352,33 +391,18 @@ keys =
 
 
 -- Procedures
-
-
-type alias Bucket =
-    { key : NavKey
-    , requestPath : AppUrl
-    }
-
-
-
 -- -- Initialization
 
 
 {-| -}
-procedure : NavKey -> AppUrl -> Promise Memory ()
-procedure key url =
-    let
-        bucket =
-            { key = key
-            , requestPath = url
-            }
-    in
+onLoad : Bucket -> Promise Memory ()
+onLoad bucket =
     -- Main Procedures
     Tepa.syncAll
         [ clockProcedure
         , Tepa.bind Tepa.currentState <|
-            \{ session } ->
-                [ Tepa.setValue EditAccount.keys.editAccountFormName session.profile.name
+            \{ link } ->
+                [ Tepa.setValue EditAccount.keys.editAccountFormName link.profile.name
                 , editAccountFormProcedure bucket
                 ]
         ]
@@ -388,7 +412,7 @@ clockProcedure : Promise Memory ()
 clockProcedure =
     let
         modifyClock f =
-            Tepa.modify <|
+            modifyBody <|
                 \m ->
                     { m | clock = f m.clock }
     in
@@ -404,7 +428,7 @@ editAccountFormProcedure bucket =
     -- IGNORE TCO
     let
         modifyEditAccountForm f =
-            Tepa.modify <|
+            modifyBody <|
                 \m ->
                     { m
                         | editAccountForm = f m.editAccountForm
@@ -475,23 +499,15 @@ editAccountFormProcedure bucket =
                                         ]
 
                                     EditAccount.GoodResponse resp ->
-                                        [ Tepa.modify <|
+                                        [ modifyLink <|
+                                            \({ profile } as m) ->
+                                                { m
+                                                    | profile = { profile | name = resp.name }
+                                                }
+                                        , modifyBody <|
                                             \m ->
                                                 { m
-                                                    | session =
-                                                        let
-                                                            session =
-                                                                m.session
-                                                        in
-                                                        { session
-                                                            | profile =
-                                                                let
-                                                                    profile =
-                                                                        session.profile
-                                                                in
-                                                                { profile | name = resp.name }
-                                                        }
-                                                    , editAccountForm =
+                                                    | editAccountForm =
                                                         let
                                                             editAccountForm =
                                                                 m.editAccountForm
@@ -514,12 +530,11 @@ editAccountFormProcedure bucket =
 runToastPromise :
     Promise Toast.Memory a
     -> Promise Memory a
-runToastPromise prom =
+runToastPromise =
     Tepa.liftMemory
-        { get = .toast
-        , set = \toast m -> { m | toast = toast }
+        { get = .link >> .toast
+        , set = \toast ({ link } as m) -> { m | link = { link | toast = toast } }
         }
-        prom
 
 
 
@@ -528,39 +543,39 @@ runToastPromise prom =
 
 {-| -}
 type alias ScenarioSet m =
-    { layer : Layer m -> Maybe (Layer Memory)
+    { layer : Layer m -> Maybe (Layer MemoryBody)
     , changeEditAccountFormAccountId :
         { value : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , clickSubmitEditAccount :
-        Scenario.Markup -> Scenario m
+        Scenario.Markup -> Scenario Flags m
     , clickStartChat :
-        Scenario.Markup -> Scenario m
+        Scenario.Markup -> Scenario Flags m
     , receiveEditAccountResp :
         (Value -> Maybe ( Http.Metadata, String ))
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectAvailable :
-        Scenario.Markup -> Scenario m
+        Scenario.Markup -> Scenario Flags m
     , expectEditAccountFormShowNoErrors :
-        Scenario.Markup -> Scenario m
+        Scenario.Markup -> Scenario Flags m
     , expectGreetingMessage :
         { value : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectClockMessage :
         { value : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectLuckyHayMessage :
         { value : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , editAccountEndpoint :
         { method : String
         , url : String
@@ -570,7 +585,7 @@ type alias ScenarioSet m =
 
 {-| -}
 type alias ScenarioProps m =
-    { querySelf : Layer m -> Maybe (Layer Memory)
+    { querySelf : Layer m -> Maybe (Layer MemoryBody)
     , session : Scenario.Session
     }
 
@@ -595,7 +610,7 @@ scenario props =
     }
 
 
-changeEditAccountFormAccountId : ScenarioProps m -> { value : String } -> Scenario.Markup -> Scenario m
+changeEditAccountFormAccountId : ScenarioProps m -> { value : String } -> Scenario.Markup -> Scenario Flags m
 changeEditAccountFormAccountId props { value } markup =
     Scenario.userOperation props.session
         markup
@@ -607,7 +622,7 @@ changeEditAccountFormAccountId props { value } markup =
         }
 
 
-clickSubmitEditAccount : ScenarioProps m -> Scenario.Markup -> Scenario m
+clickSubmitEditAccount : ScenarioProps m -> Scenario.Markup -> Scenario Flags m
 clickSubmitEditAccount props markup =
     Scenario.userOperation props.session
         markup
@@ -622,7 +637,7 @@ clickSubmitEditAccount props markup =
         }
 
 
-clickStartChat : ScenarioProps m -> Scenario.Markup -> Scenario m
+clickStartChat : ScenarioProps m -> Scenario.Markup -> Scenario Flags m
 clickStartChat props markup =
     let
         href =
@@ -658,7 +673,7 @@ clickStartChat props markup =
         ]
 
 
-receiveEditAccountResp : ScenarioProps m -> (Value -> Maybe ( Http.Metadata, String )) -> Scenario.Markup -> Scenario m
+receiveEditAccountResp : ScenarioProps m -> (Value -> Maybe ( Http.Metadata, String )) -> Scenario.Markup -> Scenario Flags m
 receiveEditAccountResp props toResponse markup =
     Scenario.httpResponse props.session
         markup
@@ -678,7 +693,7 @@ receiveEditAccountResp props toResponse markup =
         }
 
 
-expectAvailable : ScenarioProps m -> Scenario.Markup -> Scenario m
+expectAvailable : ScenarioProps m -> Scenario.Markup -> Scenario Flags m
 expectAvailable props markup =
     Scenario.expectMemory props.session
         markup
@@ -687,7 +702,7 @@ expectAvailable props markup =
         }
 
 
-expectEditAccountFormShowNoErrors : ScenarioProps m -> Scenario.Markup -> Scenario m
+expectEditAccountFormShowNoErrors : ScenarioProps m -> Scenario.Markup -> Scenario Flags m
 expectEditAccountFormShowNoErrors props markup =
     Scenario.expectAppView props.session
         markup
@@ -710,7 +725,7 @@ expectGreetingMessage :
         { value : String
         }
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectGreetingMessage props { value } markup =
     Scenario.expectAppView props.session
         markup
@@ -733,7 +748,7 @@ expectClockMessage :
         { value : String
         }
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectClockMessage props { value } markup =
     Scenario.expectAppView props.session
         markup
@@ -755,7 +770,7 @@ expectLuckyHayMessage :
         { value : String
         }
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectLuckyHayMessage props { value } markup =
     Scenario.expectAppView props.session
         markup

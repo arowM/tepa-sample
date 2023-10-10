@@ -15,13 +15,15 @@ module App.Session exposing
 -}
 
 import Tepa.Random as Random
+import Widget.Toast as Toast
 
 
 {-| Application-wide state.
 -}
 type alias Session =
-    { profile : Profile
+    { toast : Toast.Memory
     , luckyHay : LuckyHay
+    , mprofile : Maybe Profile
     }
 
 

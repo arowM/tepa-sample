@@ -43,6 +43,7 @@ module Widget.Toast exposing
 
 -}
 
+import App.Flags exposing (Flags)
 import App.ZIndex as ZIndex
 import Expect
 import Tepa exposing (Layer, Promise)
@@ -305,35 +306,35 @@ type alias ScenarioSet m =
         { message : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectErrorMessage :
         { message : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectDisappearingWarningMessage :
         { message : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , expectDisappearingErrorMessage :
         { message : String
         }
         -> Scenario.Markup
-        -> Scenario m
-    , expectNoWarningMessages : Scenario.Markup -> Scenario m
-    , expectNoErrorMessages : Scenario.Markup -> Scenario m
-    , expectNoMessages : Scenario.Markup -> Scenario m
+        -> Scenario Flags m
+    , expectNoWarningMessages : Scenario.Markup -> Scenario Flags m
+    , expectNoErrorMessages : Scenario.Markup -> Scenario Flags m
+    , expectNoMessages : Scenario.Markup -> Scenario Flags m
     , closeWarningsByMessage :
         { message : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     , closeErrorsByMessage :
         { message : String
         }
         -> Scenario.Markup
-        -> Scenario m
+        -> Scenario Flags m
     }
 
 
@@ -376,7 +377,7 @@ expectMessage :
         { message : String
         }
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectMessage props messageType { message } markup =
     Scenario.expectAppView props.session
         markup
@@ -403,7 +404,7 @@ expectDisappearingMessage :
         { message : String
         }
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectDisappearingMessage props messageType { message } markup =
     Scenario.expectAppView props.session
         markup
@@ -428,7 +429,7 @@ expectNoMessages :
     ScenarioProps m
     -> String
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 expectNoMessages props itemClassname markup =
     Scenario.expectAppView props.session
         markup
@@ -449,7 +450,7 @@ closeByMessage :
         { message : String
         }
     -> Scenario.Markup
-    -> Scenario m
+    -> Scenario Flags m
 closeByMessage props messageType { message } markup =
     Scenario.userOperation props.session
         markup
