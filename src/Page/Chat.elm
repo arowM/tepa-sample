@@ -1,5 +1,6 @@
 module Page.Chat exposing
     ( Memory
+    , MemoryLink
     , MemoryBody
     , ScenarioProps
     , ScenarioSet
@@ -13,6 +14,7 @@ module Page.Chat exposing
 {-| Chat page.
 
 @docs Memory
+@docs MemoryLink
 @docs MemoryBody
 @docs ScenarioProps
 @docs ScenarioSet
@@ -56,28 +58,21 @@ import Widget.Toast as Toast
 
 
 {-| Page memory.
-
-    - link: Pointer to the external memory.
-    - body: Memory area for this page.
-
 -}
 type alias Memory =
-    { link :
-        { profile : Profile
-        , toast : Toast.Memory
-        }
-    , body : MemoryBody
+    Tepa.LayerMemory MemoryLink MemoryBody
+
+
+{-| Pointer to the external memory.
+-}
+type alias MemoryLink =
+    { profile : Profile
+    , toast : Toast.Memory
     }
 
 
-modifyBody : (body -> body) -> Promise { link : link, body : body } ()
-modifyBody f =
-    Tepa.modify <|
-        \m ->
-            { m | body = f m.body }
-
-
-{-| -}
+{-| Memory area for this page.
+-}
 type alias MemoryBody =
     { activeUsers : List ActiveUser
     , messages : List Message -- reversed
@@ -110,7 +105,14 @@ leave =
 
 
 {-| -}
-view : Flags -> Layer Memory -> Document
+view :
+    Flags
+    ->
+        Layer
+            { link : MemoryLink
+            , body : MemoryBody
+            }
+    -> Document
 view _ =
     Tepa.layerView <|
         \context ->
@@ -331,7 +333,7 @@ chatEventHandler bucket =
                 (\event ->
                     case event of
                         Ok (Message.UserEntered param) ->
-                            [ modifyBody <|
+                            [ Tepa.modifyBody <|
                                 \m ->
                                     { m
                                         | activeUsers = param.activeUsers
@@ -340,7 +342,7 @@ chatEventHandler bucket =
                             ]
 
                         Ok (Message.UserLeft param) ->
-                            [ modifyBody <|
+                            [ Tepa.modifyBody <|
                                 \m ->
                                     { m
                                         | activeUsers = param.activeUsers
@@ -349,7 +351,7 @@ chatEventHandler bucket =
                             ]
 
                         Ok (Message.UserMessage param) ->
-                            [ modifyBody <|
+                            [ Tepa.modifyBody <|
                                 \m ->
                                     { m
                                         | messages = Message.UserMessage param :: m.messages
@@ -395,7 +397,7 @@ newMessageFormProcedure =
     -- IGNORE TCO
     let
         modifyNewMessageForm f =
-            modifyBody <|
+            Tepa.modifyBody <|
                 \m ->
                     { m
                         | newMessageForm = f m.newMessageForm
@@ -430,7 +432,7 @@ newMessageFormProcedure =
                                         NewMessage.GoodResponse resp ->
                                             [ modifyNewMessageForm <| \m -> { m | isBusy = False, showError = False }
                                             , setDomValue NewMessage.keys.body ""
-                                            , modifyBody <|
+                                            , Tepa.modifyBody <|
                                                 \m -> { m | messages = resp :: m.messages }
                                             , Tepa.lazy <| \_ -> newMessageFormProcedure
                                             ]
@@ -460,9 +462,10 @@ runToastPromise :
     -> Promise Memory a
 runToastPromise =
     Tepa.liftMemory
-        { get = .link >> .toast
-        , set = \toast ({ link } as m) -> { m | link = { link | toast = toast } }
+        { get = .toast
+        , set = \toast m -> { m | toast = toast }
         }
+        >> Tepa.onLink
 
 
 

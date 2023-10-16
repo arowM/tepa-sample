@@ -1,5 +1,6 @@
 module Page.Login exposing
     ( Memory
+    , MemoryLink
     , MemoryBody
     , ScenarioSet
     , init
@@ -12,6 +13,7 @@ module Page.Login exposing
 {-| Login page.
 
 @docs Memory
+@docs MemoryLink
 @docs MemoryBody
 @docs ScenarioSet
 @docs init
@@ -45,35 +47,23 @@ import Widget.Toast as Toast
 
 
 {-| Page memory.
-
-    - link: Pointer to the external memory.
-    - body: Memory area for this page.
-
 -}
 type alias Memory =
-    { link :
-        { mprofile : Maybe Profile
-        , toast : Toast.Memory
-        }
-    , body : MemoryBody
+    Tepa.LayerMemory
+        MemoryLink
+        MemoryBody
+
+
+{-| Pointer to the external memory.
+-}
+type alias MemoryLink =
+    { mprofile : Maybe Profile
+    , toast : Toast.Memory
     }
 
 
-modifyLink : (link -> link) -> Promise { link : link, body : body } ()
-modifyLink f =
-    Tepa.modify <|
-        \m ->
-            { m | link = f m.link }
-
-
-modifyBody : (body -> body) -> Promise { link : link, body : body } ()
-modifyBody f =
-    Tepa.modify <|
-        \m ->
-            { m | body = f m.body }
-
-
-{-| -}
+{-| Memory area for this page.
+-}
 type alias MemoryBody =
     { loginForm : LoginFormMemory
     }
@@ -99,7 +89,14 @@ leave =
 
 
 {-| -}
-view : Flags -> Layer Memory -> Document
+view :
+    Flags
+    ->
+        Layer
+            { link : MemoryLink
+            , body : MemoryBody
+            }
+    -> Document
 view _ =
     Tepa.layerView <|
         \context ->
@@ -290,7 +287,7 @@ loginFormProcedure bucket =
     -- IGNORE TCO
     let
         modifyLoginForm f =
-            modifyBody <|
+            Tepa.modifyBody <|
                 \m -> { m | loginForm = f m.loginForm }
     in
     Tepa.sequence
@@ -382,22 +379,15 @@ loginFormProcedure bucket =
                                         ]
 
                                     Login.GoodResponse resp ->
-                                        [ modifyLink <|
+                                        [ Tepa.modifyLink <|
                                             \m ->
                                                 { m
                                                     | mprofile = Just resp.profile
                                                 }
-                                        , modifyBody <|
+                                        , modifyLoginForm <|
                                             \m ->
                                                 { m
-                                                    | loginForm =
-                                                        let
-                                                            loginForm =
-                                                                m.loginForm
-                                                        in
-                                                        { loginForm
-                                                            | isBusy = False
-                                                        }
+                                                    | isBusy = False
                                                 }
                                         , Nav.pushPath bucket.key
                                             (bucket.requestPath.queryParameters
@@ -426,9 +416,10 @@ runToastPromise :
     -> Promise Memory a
 runToastPromise =
     Tepa.liftMemory
-        { get = .link >> .toast
-        , set = \toast ({ link } as m) -> { m | link = { link | toast = toast } }
+        { get = .toast
+        , set = \toast m -> { m | toast = toast }
         }
+        >> Tepa.onLink
 
 
 
