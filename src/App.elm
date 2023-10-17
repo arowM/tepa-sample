@@ -104,9 +104,9 @@ type Page
     | PageChat (Layer Page.Chat.MemoryBody)
 
 
-onPageNotFoundLayer : Promise Page.NotFound.Memory () -> Promise Memory (Tepa.LayerResult ())
+onPageNotFoundLayer : Promise Page.NotFound.Memory () -> Promise Memory (Tepa.ResultOnLayer ())
 onPageNotFoundLayer =
-    Tepa.onLinkedLayer
+    Tepa.onLayer
         { getLink =
             \{ session } ->
                 Just
@@ -141,9 +141,9 @@ getPageLoginLayer m =
             Nothing
 
 
-onPageLoginLayer : Promise Page.Login.Memory () -> Promise Memory (Tepa.LayerResult ())
+onPageLoginLayer : Promise Page.Login.Memory () -> Promise Memory (Tepa.ResultOnLayer ())
 onPageLoginLayer =
-    Tepa.onLinkedLayer
+    Tepa.onLayer
         { getLink =
             \{ session } ->
                 Just
@@ -176,9 +176,9 @@ getPageHomeLayer m =
             Nothing
 
 
-onPageHomeLayer : Promise Page.Home.Memory () -> Promise Memory (Tepa.LayerResult ())
+onPageHomeLayer : Promise Page.Home.Memory () -> Promise Memory (Tepa.ResultOnLayer ())
 onPageHomeLayer =
-    Tepa.onLinkedLayer
+    Tepa.onLayer
         { getLink =
             \{ session } ->
                 Maybe.map
@@ -216,9 +216,9 @@ getPageChatLayer m =
             Nothing
 
 
-onPageChatLayer : Promise Page.Chat.Memory () -> Promise Memory (Tepa.LayerResult ())
+onPageChatLayer : Promise Page.Chat.Memory () -> Promise Memory (Tepa.ResultOnLayer ())
 onPageChatLayer =
-    Tepa.onLinkedLayer
+    Tepa.onLayer
         { getLink =
             \{ session } ->
                 Maybe.map
@@ -382,20 +382,20 @@ onUrlChange flags newUrl key =
 assertLayerExist :
     { layerName : String
     }
-    -> Promise m (Tepa.LayerResult ())
+    -> Promise m (Tepa.ResultOnLayer ())
     -> Promise m ()
 assertLayerExist { layerName } =
     Tepa.andThen
         (\res ->
             case res of
-                Tepa.LayerOk () ->
+                Tepa.SucceedOnLayer () ->
                     Tepa.succeed ()
 
-                Tepa.LayerExpired ->
+                Tepa.BodyExpired ->
                     Tepa.succeed ()
 
-                Tepa.LayerNotExists ->
-                    Tepa.assertionError <| "LayerNotExists on " ++ layerName
+                Tepa.LinkExpired ->
+                    Tepa.assertionError <| "LinkExpired on " ++ layerName
         )
 
 

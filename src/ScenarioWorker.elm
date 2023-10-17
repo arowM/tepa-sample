@@ -1,4 +1,4 @@
-port module ScenarioWorker exposing (Memory, main)
+port module ScenarioWorker exposing (Flags, Memory, main)
 
 import Json.Decode as JD
 import Json.Encode as JE exposing (Value)
@@ -7,11 +7,13 @@ import Tepa exposing (Program, Promise)
 import Tepa.Scenario as Scenario
 
 
-main : Program Memory
+main : Program Flags Memory
 main =
     Tepa.headless
-        { init = {}
-        , procedure = procedure
+        { init =
+            \rawFlags ->
+                Tepa.succeed ( JD.decodeValue flagsDecoder rawFlags, {} )
+        , onLoad = onLoad
         }
 
 
@@ -26,18 +28,18 @@ port output_response : Tepa.PortResponse msg
 
 
 type alias Flags =
-    MarkupConfig
+    Result JD.Error MarkupConfig
 
 
-flagsDecoder : JD.Decoder Flags
+flagsDecoder : JD.Decoder MarkupConfig
 flagsDecoder =
     JD.map MarkupConfig <|
         JD.field "dev" JD.bool
 
 
-procedure : Value -> Promise Memory ()
-procedure rawFlags =
-    case JD.decodeValue flagsDecoder rawFlags of
+onLoad : Flags -> Promise Memory ()
+onLoad flags =
+    case flags of
         Err err ->
             output <|
                 JE.object

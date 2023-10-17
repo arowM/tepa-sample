@@ -17,9 +17,10 @@
         "build": "rimraf dist/ && parcel build src/scenario.html src/index.html --no-source-maps --dist-dir dist/ --public-url /tepa",
         "build:scenario": "npm run build:scenario-worker && node ./cli/scenario-markdown.js",
         "build:scenario-worker": "elm make src/ScenarioWorker.elm --output=./dist/scenario-worker.js",
-        "test": "npm run test:elm && npm run test:ts && npm run test:assets",
+        "test": "npm run test:elm && npm run test:ts && npm run test:assets && npm run test:scenario-worker",
         "test:elm": "elm-review && elm-format --validate src/ && elm-test && elm-verify-examples -r && test ! -d ./tests/VerifyExamples && elm-doc-preview --output /dev/null && elm make --output=/dev/null src/App.elm",
         "test:ts": "tsc --outDir /tmp/winter-morning/supporter && eslint './src/**/*.ts'",
+        "test:scenario-worker": "elm make src/ScenarioWorker.elm --output=/tmp/scenario-worker.js",
         "test:assets": "prettier --check src"
     },
     "devDependencies": {

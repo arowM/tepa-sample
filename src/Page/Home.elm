@@ -1,5 +1,6 @@
 module Page.Home exposing
     ( Memory
+    , MemoryLink
     , MemoryBody
     , ClockMemory
     , ScenarioProps
@@ -14,6 +15,7 @@ module Page.Home exposing
 {-| Home page.
 
 @docs Memory
+@docs MemoryLink
 @docs MemoryBody
 @docs ClockMemory
 @docs ScenarioProps
@@ -51,36 +53,22 @@ import Widget.Toast as Toast
 
 
 {-| Page memory.
-
-    - link: Pointer to the external memory.
-    - body: Memory area for this page.
-
 -}
 type alias Memory =
-    { link :
-        { profile : Profile
-        , luckyHay : LuckyHay
-        , toast : Toast.Memory
-        }
-    , body : MemoryBody
+    Tepa.LayerMemory MemoryLink MemoryBody
+
+
+{-| Pointer to the external memory.
+-}
+type alias MemoryLink =
+    { profile : Profile
+    , luckyHay : LuckyHay
+    , toast : Toast.Memory
     }
 
 
-modifyLink : (link -> link) -> Promise { link : link, body : body } ()
-modifyLink f =
-    Tepa.modify <|
-        \m ->
-            { m | link = f m.link }
-
-
-modifyBody : (body -> body) -> Promise { link : link, body : body } ()
-modifyBody f =
-    Tepa.modify <|
-        \m ->
-            { m | body = f m.body }
-
-
-{-| -}
+{-| Memory area for this page.
+-}
 type alias MemoryBody =
     { clock : ClockMemory
     , editAccountForm : EditAccountFormMemory
@@ -129,7 +117,14 @@ leave =
 
 
 {-| -}
-view : Flags -> Layer Memory -> Document
+view :
+    Flags
+    ->
+        Layer
+            { link : MemoryLink
+            , body : MemoryBody
+            }
+    -> Document
 view _ =
     Tepa.layerView <|
         \context ->
@@ -400,9 +395,13 @@ onLoad bucket =
     -- Main Procedures
     Tepa.syncAll
         [ clockProcedure
-        , Tepa.bind Tepa.currentState <|
-            \{ link } ->
-                [ Tepa.setValue EditAccount.keys.editAccountFormName link.profile.name
+        , Tepa.bind
+            (Tepa.currentState
+                |> Tepa.onLink
+            )
+          <|
+            \{ profile } ->
+                [ Tepa.setValue EditAccount.keys.editAccountFormName profile.name
                 , editAccountFormProcedure bucket
                 ]
         ]
@@ -412,7 +411,7 @@ clockProcedure : Promise Memory ()
 clockProcedure =
     let
         modifyClock f =
-            modifyBody <|
+            Tepa.modifyBody <|
                 \m ->
                     { m | clock = f m.clock }
     in
@@ -428,7 +427,7 @@ editAccountFormProcedure bucket =
     -- IGNORE TCO
     let
         modifyEditAccountForm f =
-            modifyBody <|
+            Tepa.modifyBody <|
                 \m ->
                     { m
                         | editAccountForm = f m.editAccountForm
@@ -439,6 +438,7 @@ editAccountFormProcedure bucket =
             { key = keys.editAccountFormSaveButton
             , type_ = "click"
             }
+            |> Tepa.onBody
         , modifyEditAccountForm <|
             \m -> { m | isBusy = True }
         , Tepa.bind Tepa.getValues <|
@@ -499,22 +499,15 @@ editAccountFormProcedure bucket =
                                         ]
 
                                     EditAccount.GoodResponse resp ->
-                                        [ modifyLink <|
+                                        [ Tepa.modifyLink <|
                                             \({ profile } as m) ->
                                                 { m
                                                     | profile = { profile | name = resp.name }
                                                 }
-                                        , modifyBody <|
+                                        , modifyEditAccountForm <|
                                             \m ->
                                                 { m
-                                                    | editAccountForm =
-                                                        let
-                                                            editAccountForm =
-                                                                m.editAccountForm
-                                                        in
-                                                        { editAccountForm
-                                                            | isBusy = False
-                                                        }
+                                                    | isBusy = False
                                                 }
                                         , Tepa.lazy <|
                                             \_ -> editAccountFormProcedure bucket
@@ -532,9 +525,10 @@ runToastPromise :
     -> Promise Memory a
 runToastPromise =
     Tepa.liftMemory
-        { get = .link >> .toast
-        , set = \toast ({ link } as m) -> { m | link = { link | toast = toast } }
+        { get = .toast
+        , set = \toast m -> { m | toast = toast }
         }
+        >> Tepa.onLink
 
 
 

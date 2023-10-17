@@ -25,31 +25,27 @@ import App.Flags exposing (Flags)
 import App.Path as Path
 import AppUrl
 import Dict
-import Tepa exposing (Document, Layer, Promise)
+import Tepa exposing (Document, Layer, LayerMemory, Promise)
 import Tepa.Html as Html
 import Tepa.Mixin as Mixin exposing (Mixin)
 import Widget.Toast as Toast
 
 
 {-| Page memory.
-
-    - link: Pointer to the external memory.
-    - body: Memory area for this page.
-
 -}
 type alias Memory =
-    { link : MemoryLink
-    , body : MemoryBody
-    }
+    LayerMemory MemoryLink MemoryBody
 
 
-{-| -}
+{-| Pointer to the external memory.
+-}
 type alias MemoryLink =
     { toast : Toast.Memory
     }
 
 
-{-| -}
+{-| Memory area for this page.
+-}
 type alias MemoryBody =
     {}
 
@@ -73,7 +69,14 @@ leave =
 
 
 {-| -}
-view : Flags -> Layer Memory -> Document
+view :
+    Flags
+    ->
+        Layer
+            { link : MemoryLink
+            , body : MemoryBody
+            }
+    -> Document
 view _ =
     Tepa.layerView <|
         \_ ->
