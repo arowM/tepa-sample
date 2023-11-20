@@ -72,7 +72,7 @@ type alias ScenarioMemory =
 documentView : Layer () -> Document
 documentView =
     Tepa.layerView <|
-        \{ setKey, checks } ->
+        \{ setKey, checks } _ ->
             let
                 devModeCheckboxId =
                     "devModeCheckboxId"

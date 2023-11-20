@@ -3,6 +3,7 @@ module Page.Home exposing
     , MemoryLink
     , MemoryBody
     , ClockMemory
+    , EditAccountFormMemory
     , ScenarioProps
     , ScenarioSet
     , init
@@ -18,6 +19,7 @@ module Page.Home exposing
 @docs MemoryLink
 @docs MemoryBody
 @docs ClockMemory
+@docs EditAccountFormMemory
 @docs ScenarioProps
 @docs ScenarioSet
 @docs init
@@ -83,6 +85,13 @@ type alias ClockMemory =
 
 
 {-| -}
+type alias EditAccountFormMemory =
+    { isBusy : Bool
+    , showError : Bool
+    }
+
+
+{-| -}
 init : Promise m MemoryBody
 init =
     Tepa.succeed
@@ -118,102 +127,100 @@ leave =
 
 {-| -}
 view :
-    Flags
-    ->
-        Layer
-            { link : MemoryLink
-            , body : MemoryBody
-            }
+    { flags : Flags
+    , link : MemoryLink
+    , body : MemoryBody
+    }
+    -> ViewContext
     -> Document
-view _ =
-    Tepa.layerView <|
-        \context ->
-            { title = "Sample App | Home"
-            , body =
-                [ let
-                    bodyContext =
-                        Tepa.mapViewContext .body context
-
-                    linkContext =
-                        Tepa.mapViewContext .link context
-                  in
-                  Html.div
-                    [ localClass "page"
+view param context =
+    { title = "Sample App | Home"
+    , body =
+        [ Html.div
+            [ localClass "page"
+            ]
+            [ Header.view
+                (localClass "header")
+            , Html.div
+                [ localClass "top"
+                ]
+                [ clockView
+                    { form = param.body.clock
+                    }
+                    context
+                , Html.div
+                    [ localClass "greetingArea"
                     ]
-                    [ Header.view
-                        (localClass "header")
-                    , Html.div
-                        [ localClass "top"
+                    [ Html.div
+                        [ localClass "greetingArea_greeting"
                         ]
-                        [ clockView (Tepa.mapViewContext .clock bodyContext)
-                        , Html.div
-                            [ localClass "greetingArea"
+                        [ Html.span
+                            [ localClass "greetingArea_greeting_text"
                             ]
-                            [ Html.div
-                                [ localClass "greetingArea_greeting"
-                                ]
-                                [ Html.span
-                                    [ localClass "greetingArea_greeting_text"
-                                    ]
-                                    [ Html.text "Hi, "
-                                    ]
-                                , Html.span
-                                    [ localClass "greetingArea_greeting_name"
-                                    ]
-                                    [ Html.text linkContext.state.profile.name
-                                    ]
-                                , Html.span
-                                    [ localClass "greetingArea_greeting_text"
-                                    ]
-                                    [ Html.text "!"
-                                    ]
-                                ]
-                            , Html.div
-                                [ localClass "greetingArea_luckyHay"
-                                ]
-                                [ Html.span
-                                    [ localClass "greetingArea_luckyHay_text"
-                                    ]
-                                    [ Html.text "Your lucky grass hay for today: "
-                                    ]
-                                , Html.span
-                                    [ localClass "greetingArea_luckyHay_value"
-                                    ]
-                                    [ displayLuckyHay linkContext.state.luckyHay
-                                        |> Html.text
-                                    ]
-                                ]
+                            [ Html.text "Hi, "
+                            ]
+                        , Html.span
+                            [ localClass "greetingArea_greeting_name"
+                            ]
+                            [ Html.text param.link.profile.name
+                            ]
+                        , Html.span
+                            [ localClass "greetingArea_greeting_text"
+                            ]
+                            [ Html.text "!"
                             ]
                         ]
                     , Html.div
-                        [ localClass "body"
+                        [ localClass "greetingArea_luckyHay"
                         ]
-                        [ editAccountFormView (Tepa.mapViewContext .editAccountForm bodyContext)
-                        , Html.div
-                            [ localClass "dashboard_links"
+                        [ Html.span
+                            [ localClass "greetingArea_luckyHay_text"
                             ]
-                            [ Html.a
-                                [ localClass "dashboard_links_linkButton-chat"
-                                , Mixin.attribute "href"
-                                    (AppUrl.toString
-                                        { path =
-                                            [ Path.prefix
-                                            , "chat"
-                                            ]
-                                        , queryParameters = Dict.empty
-                                        , fragment = Nothing
-                                        }
-                                    )
-                                ]
-                                [ Html.text "Start Chat"
-                                ]
+                            [ Html.text "Your lucky grass hay for today: "
                             ]
-                        , Toast.view
-                            (Tepa.mapViewContext .toast linkContext)
+                        , Html.span
+                            [ localClass "greetingArea_luckyHay_value"
+                            ]
+                            [ displayLuckyHay param.link.luckyHay
+                                |> Html.text
+                            ]
                         ]
                     ]
                 ]
-            }
+            , Html.div
+                [ localClass "body"
+                ]
+                [ editAccountFormView
+                    { form = param.body.editAccountForm
+                    }
+                    context
+                , Html.div
+                    [ localClass "dashboard_links"
+                    ]
+                    [ Html.a
+                        [ localClass "dashboard_links_linkButton-chat"
+                        , Mixin.attribute "href"
+                            (AppUrl.toString
+                                { path =
+                                    [ Path.prefix
+                                    , "chat"
+                                    ]
+                                , queryParameters = Dict.empty
+                                , fragment = Nothing
+                                }
+                            )
+                        ]
+                        [ Html.text "Start Chat"
+                        ]
+                    ]
+                , Toast.view
+                    { state = param.link.toast
+                    }
+                    context
+                ]
+            ]
+        ]
+    }
 
 
 {-| Stringify LuckyHay for display.
@@ -237,12 +244,16 @@ displayLuckyHay hay =
             "Bermuda grass"
 
 
-clockView : ViewContext ClockMemory -> Html
-clockView { state } =
+clockView :
+    { form : ClockMemory
+    }
+    -> ViewContext
+    -> Html
+clockView param _ =
     Html.div
         [ localClass "clock"
         ]
-        [ Html.text <| formatTime state.zone state.currentTime
+        [ Html.text <| formatTime param.form.zone param.form.currentTime
         ]
 
 
@@ -311,14 +322,12 @@ formatTime zone time =
 -- -- EditAccountForm
 
 
-type alias EditAccountFormMemory =
-    { isBusy : Bool
-    , showError : Bool
+editAccountFormView :
+    { form : EditAccountFormMemory
     }
-
-
-editAccountFormView : ViewContext EditAccountFormMemory -> Html
-editAccountFormView { state, setKey, values } =
+    -> ViewContext
+    -> Html
+editAccountFormView param { setKey, values } =
     let
         errors =
             EditAccount.toFormErrors values
@@ -326,7 +335,7 @@ editAccountFormView { state, setKey, values } =
     Html.div
         [ localClass "editAccountForm"
         , Mixin.boolAttribute "aria-invalid"
-            (state.showError && not (List.isEmpty errors))
+            (param.form.showError && not (List.isEmpty errors))
         ]
         [ Html.node "label"
             [ localClass "editAccountForm_id"
@@ -338,16 +347,16 @@ editAccountFormView { state, setKey, values } =
                 ]
             , Html.node "input"
                 [ Mixin.attribute "type" "text"
-                , Mixin.disabled state.isBusy
+                , Mixin.disabled param.form.isBusy
                 , localClass "editAccountForm_id_input"
                 , setKey EditAccount.keys.editAccountFormName
                 , Mixin.boolAttribute "aria-invalid" <|
-                    state.showError
+                    param.form.showError
                         && List.member EditAccount.IdRequired errors
                 ]
                 []
             ]
-        , if state.showError && List.length errors > 0 then
+        , if param.form.showError && List.length errors > 0 then
             Html.div
                 [ localClass "editAccountForm_errorField"
                 ]
@@ -367,8 +376,8 @@ editAccountFormView { state, setKey, values } =
         , Html.node "button"
             [ localClass "editAccountForm_saveButton"
             , Mixin.attribute "type" "button"
-            , Mixin.boolAttribute "aria-busy" state.isBusy
-            , Mixin.boolAttribute "aria-disabled" <| state.showError && not (List.isEmpty errors)
+            , Mixin.boolAttribute "aria-busy" param.form.isBusy
+            , Mixin.boolAttribute "aria-disabled" <| param.form.showError && not (List.isEmpty errors)
             , setKey keys.editAccountFormSaveButton
             ]
             [ Html.text "Save"

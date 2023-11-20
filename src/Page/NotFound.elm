@@ -21,11 +21,10 @@ module Page.NotFound exposing
 -}
 
 import App.Bucket exposing (Bucket)
-import App.Flags exposing (Flags)
 import App.Path as Path
 import AppUrl
 import Dict
-import Tepa exposing (Document, Layer, LayerMemory, Promise)
+import Tepa exposing (Document, LayerMemory, Promise)
 import Tepa.Html as Html
 import Tepa.Mixin as Mixin exposing (Mixin)
 import Widget.Toast as Toast
@@ -69,43 +68,34 @@ leave =
 
 
 {-| -}
-view :
-    Flags
-    ->
-        Layer
-            { link : MemoryLink
-            , body : MemoryBody
-            }
-    -> Document
-view _ =
-    Tepa.layerView <|
-        \_ ->
-            { title = "Sample App | Not Found"
-            , body =
-                [ Html.div
-                    [ localClass "page"
-                    ]
-                    [ Html.div
-                        [ localClass "mainMessage"
-                        ]
-                        [ Html.text "Page Not Found."
-                        ]
-                    , Html.a
-                        [ Mixin.attribute "href" <|
-                            AppUrl.toString
-                                { path =
-                                    [ Path.prefix
-                                    ]
-                                , queryParameters = Dict.empty
-                                , fragment = Nothing
-                                }
-                        , localClass "homeLink"
-                        ]
-                        [ Html.text "Home"
-                        ]
-                    ]
+view : Document
+view =
+    { title = "Sample App | Not Found"
+    , body =
+        [ Html.div
+            [ localClass "page"
+            ]
+            [ Html.div
+                [ localClass "mainMessage"
                 ]
-            }
+                [ Html.text "Page Not Found."
+                ]
+            , Html.a
+                [ Mixin.attribute "href" <|
+                    AppUrl.toString
+                        { path =
+                            [ Path.prefix
+                            ]
+                        , queryParameters = Dict.empty
+                        , fragment = Nothing
+                        }
+                , localClass "homeLink"
+                ]
+                [ Html.text "Home"
+                ]
+            ]
+        ]
+    }
 
 
 

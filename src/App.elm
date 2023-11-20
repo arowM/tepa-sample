@@ -266,63 +266,60 @@ view flags state =
             pageLoadingView
 
         ( PageNotFound pageNotFound, _ ) ->
-            Page.NotFound.view flags
-                (Tepa.mapLayer
-                    (\body ->
-                        { link =
-                            { toast = state.session.toast
-                            }
-                        , body = body
-                        }
-                    )
-                    pageNotFound
+            Tepa.layerView
+                (\_ _ ->
+                    Page.NotFound.view
                 )
+                pageNotFound
 
         ( PageLogin pageLogin, _ ) ->
-            Page.Login.view flags
-                (Tepa.mapLayer
-                    (\body ->
-                        { link =
+            Tepa.layerView
+                (\context body ->
+                    Page.Login.view
+                        { flags = flags
+                        , link =
                             { mprofile = state.session.mprofile
                             , toast = state.session.toast
                             }
                         , body = body
                         }
-                    )
-                    pageLogin
+                        context
                 )
+                pageLogin
 
         ( PageHome pageHome, Just profile ) ->
-            Page.Home.view flags
-                (Tepa.mapLayer
-                    (\body ->
-                        { link =
+            Tepa.layerView
+                (\context body ->
+                    Page.Home.view
+                        { flags = flags
+                        , link =
                             { profile = profile
                             , luckyHay = state.session.luckyHay
                             , toast = state.session.toast
                             }
                         , body = body
                         }
-                    )
-                    pageHome
+                        context
                 )
+                pageHome
 
         ( PageHome _, Nothing ) ->
             unexpectedState
 
         ( PageChat pageChat, Just profile ) ->
-            Page.Chat.view flags
-                (Tepa.mapLayer
-                    (\body ->
-                        { link =
+            Tepa.layerView
+                (\context body ->
+                    Page.Chat.view
+                        { flags = flags
+                        , link =
                             { profile = profile
                             , toast = state.session.toast
                             }
                         , body = body
                         }
-                    )
-                    pageChat
+                        context
                 )
+                pageChat
 
         ( PageChat _, Nothing ) ->
             unexpectedState
@@ -574,8 +571,7 @@ scenario session =
             }
     , toast =
         Toast.scenario
-            { querySelf =
-                Tepa.mapLayer (\m -> m.session.toast) >> Just
+            { querySelf = Scenario.mapLayer (\m -> m.session.toast) Scenario.appLayer
             , session = session
             }
     , app =

@@ -1,17 +1,17 @@
 port module App.Dom exposing
-    ( overwriteValue, OverwriteResponse(..)
-    , response
+    ( overwriteValue
+    , response, OverwriteResponse(..)
     , portNames
     )
 
 {-|
 
-@docs overwriteValue, OverwriteResponse
+@docs overwriteValue
 
 
 # Endpoint specification
 
-@docs response
+@docs response, OverwriteResponse
 @docs portNames
 
 -}
@@ -27,20 +27,44 @@ port app_dom_overwrite_value_request : PortRequest a
 port app_dom_overwrite_value_response : PortResponse a
 
 
-{-| -}
-overwriteValue : String -> String -> Promise m OverwriteResponse
+{-| Similar to `Tepa.setValue`, but actually overwrite target DOM value.
+-}
+overwriteValue : String -> String -> Promise m ()
 overwriteValue id value =
-    Tepa.portRequest
-        { request = app_dom_overwrite_value_request
-        , response = app_dom_overwrite_value_response
-        , portName = portNames.overwriteValue
-        , requestBody =
-            JE.object
-                [ ( "id", JE.string id )
-                , ( "value", JE.string value )
-                ]
-        }
-        |> Tepa.map response
+    Tepa.sequence
+        [ Tepa.portRequest
+            { request = app_dom_overwrite_value_request
+            , response = app_dom_overwrite_value_response
+            , portName = portNames.overwriteValue
+            , requestBody =
+                JE.object
+                    [ ( "id", JE.string id )
+                    , ( "value", JE.string value )
+                    ]
+            }
+            |> Tepa.map response
+            |> Tepa.andThen
+                (\resp ->
+                    case resp of
+                        OverwriteElementNotFound ->
+                            Tepa.assertionError <|
+                                "overwriteValue: "
+                                    ++ id
+                                    ++ " not found."
+
+                        OverwriteFatalError ->
+                            Tepa.assertionError <|
+                                "overwriteValue: Fatal error on trying to overwrite "
+                                    ++ id
+                                    ++ " with \""
+                                    ++ value
+                                    ++ "\"."
+
+                        GoodOverwriteResponse ->
+                            Tepa.none
+                )
+        , Tepa.setValue id value
+        ]
 
 
 {-| -}

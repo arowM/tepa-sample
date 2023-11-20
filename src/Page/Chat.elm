@@ -106,88 +106,72 @@ leave =
 
 {-| -}
 view :
-    Flags
-    ->
-        Layer
-            { link : MemoryLink
-            , body : MemoryBody
-            }
+    { flags : Flags
+    , link : MemoryLink
+    , body : MemoryBody
+    }
+    -> ViewContext
     -> Document
-view _ =
-    Tepa.layerView <|
-        \context ->
-            { title = "Sample App | Chat"
-            , body =
-                [ let
-                    bodyContext =
-                        Tepa.mapViewContext .body context
-
-                    linkContext =
-                        Tepa.mapViewContext .link context
-                  in
-                  Html.div
-                    [ localClass "page"
-                    ]
-                    [ Header.view
-                        (localClass "header")
-                    , Html.div
-                        [ localClass "body"
-                        ]
-                        [ activeUsersView bodyContext.state.activeUsers
-                        , messageFieldView bodyContext.state.messages
-                        , Toast.view
-                            (Tepa.mapViewContext .toast linkContext)
-                        ]
-                    , Html.div
-                        [ localClass "footer"
-                        ]
-                        [ newMessageFormView
-                            (Tepa.mapViewContext .newMessageForm bodyContext)
-                        ]
-                    ]
+view param context =
+    { title = "Sample App | Chat"
+    , body =
+        [ Html.div
+            [ localClass "page"
+            ]
+            [ Header.view
+                (localClass "header")
+            , Html.div
+                [ localClass "body"
                 ]
-            }
-
-
-activeUsersView : List ActiveUser -> Html
-activeUsersView activeUsers =
-    Html.div
-        [ localClass "activeUsers"
-        ]
-        [ Html.div
-            [ localClass "activeUsers_header"
-            ]
-            [ Html.text "Active Users"
-            ]
-        , Html.div
-            [ localClass "activeUsers_body"
-            ]
-            (List.map
-                (\activeUser ->
-                    Html.div
-                        [ localClass "activeUsers_body_item"
-                        , Mixin.style "--active-user-color" activeUser.color
+                [ Html.div
+                    [ localClass "activeUsers"
+                    ]
+                    [ Html.div
+                        [ localClass "activeUsers_header"
                         ]
-                        [ Html.text activeUser.displayName
+                        [ Html.text "Active Users"
                         ]
-                )
-                activeUsers
-            )
-        ]
-
-
-messageFieldView : List Message -> Html
-messageFieldView messages =
-    Html.div
-        [ localClass "messageField"
-        ]
-        [ Html.div
-            [ localClass "messageField_body"
+                    , Html.div
+                        [ localClass "activeUsers_body"
+                        ]
+                        (List.map
+                            (\activeUser ->
+                                Html.div
+                                    [ localClass "activeUsers_body_item"
+                                    , Mixin.style "--active-user-color" activeUser.color
+                                    ]
+                                    [ Html.text activeUser.displayName
+                                    ]
+                            )
+                            param.body.activeUsers
+                        )
+                    ]
+                , Html.div
+                    [ localClass "messageField"
+                    ]
+                    [ Html.div
+                        [ localClass "messageField_body"
+                        ]
+                        (List.reverse param.body.messages
+                            |> List.map renderMessage
+                        )
+                    ]
+                , Toast.view
+                    { state = param.link.toast
+                    }
+                    context
+                ]
+            , Html.div
+                [ localClass "footer"
+                ]
+                [ newMessageFormView
+                    { form = param.body.newMessageForm
+                    }
+                    context
+                ]
             ]
-            (List.reverse messages
-                |> List.map renderMessage
-            )
         ]
+    }
 
 
 renderMessage : Message -> Html
@@ -258,8 +242,11 @@ type alias NewMessageFormMemory =
     }
 
 
-newMessageFormView : ViewContext NewMessageFormMemory -> Html
-newMessageFormView { state, setKey, values, layerId } =
+newMessageFormView :
+    { form : NewMessageFormMemory }
+    -> ViewContext
+    -> Html
+newMessageFormView param { setKey, values } =
     let
         errors =
             NewMessage.toFormErrors values
@@ -267,21 +254,18 @@ newMessageFormView { state, setKey, values, layerId } =
     Html.div
         [ localClass "newMessageForm"
         , Mixin.boolAttribute "aria-invalid"
-            (state.showError && not (List.isEmpty errors))
+            (param.form.showError && not (List.isEmpty errors))
         ]
         [ Html.node "textarea"
             [ localClass "newMessageForm_control_body"
-            , domId
-                { layerId = layerId
-                , key = NewMessage.keys.body
-                }
+            , Mixin.id NewMessage.keys.body
             , setKey NewMessage.keys.body
             , Mixin.boolAttribute "aria-invalid" <|
-                state.showError
+                param.form.showError
                     && List.member NewMessage.BodyRequired errors
             ]
             []
-        , if state.showError && List.length errors > 0 then
+        , if param.form.showError && List.length errors > 0 then
             Html.div
                 [ localClass "newMessageForm_errorField"
                 ]
@@ -301,8 +285,8 @@ newMessageFormView { state, setKey, values, layerId } =
         , Html.node "button"
             [ localClass "newMessageForm_control_submit"
             , Mixin.attribute "type" "button"
-            , Mixin.boolAttribute "aria-busy" state.isBusy
-            , Mixin.boolAttribute "aria-disabled" <| state.showError && not (List.isEmpty errors)
+            , Mixin.boolAttribute "aria-busy" param.form.isBusy
+            , Mixin.boolAttribute "aria-disabled" <| param.form.showError && not (List.isEmpty errors)
             , setKey NewMessage.keys.submit
             ]
             [ Html.text "Submit"
@@ -431,7 +415,7 @@ newMessageFormProcedure =
                                     case response of
                                         NewMessage.GoodResponse resp ->
                                             [ modifyNewMessageForm <| \m -> { m | isBusy = False, showError = False }
-                                            , setDomValue NewMessage.keys.body ""
+                                            , RawDom.overwriteValue NewMessage.keys.body ""
                                             , Tepa.modifyBody <|
                                                 \m -> { m | messages = resp :: m.messages }
                                             , Tepa.lazy <| \_ -> newMessageFormProcedure
@@ -883,22 +867,6 @@ expectSubmitMessageButtonIsBusy props isBusy markup =
 
 
 
--- Helper promises
-
-
-setDomValue : String -> String -> Promise m ()
-setDomValue key value =
-    Tepa.bind Tepa.currentLayerId <|
-        \layerId ->
-            [ RawDom.overwriteValue
-                (domIdString { layerId = layerId, key = key })
-                value
-                |> Tepa.void
-            , Tepa.setValue key value
-            ]
-
-
-
 -- Helper functions
 
 
@@ -910,16 +878,6 @@ localClass name =
 localClassSelector : String -> Selector.Selector
 localClassSelector name =
     Selector.class (pagePrefix ++ name)
-
-
-domId : { layerId : String, key : String } -> Mixin
-domId props =
-    Mixin.id (domIdString props)
-
-
-domIdString : { layerId : String, key : String } -> String
-domIdString { layerId, key } =
-    layerId ++ "--" ++ key
 
 
 pagePrefix : String

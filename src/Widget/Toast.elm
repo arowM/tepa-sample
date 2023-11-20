@@ -46,7 +46,7 @@ module Widget.Toast exposing
 import App.Flags exposing (Flags)
 import App.ZIndex as ZIndex
 import Expect
-import Tepa exposing (Layer, LayerMemory, Promise)
+import Tepa exposing (Layer, Promise)
 import Tepa.Html as Html exposing (Html)
 import Tepa.HtmlSelector as Selector
 import Tepa.Mixin as Mixin exposing (Mixin)
@@ -85,7 +85,8 @@ type Memory
 
 
 type alias Memory_ =
-    { items : List (Layer ToastItemMemoryBody)
+    { items : List ToastItemMemory -- reversed
+    , nextItemId : Int
     }
 
 
@@ -110,6 +111,7 @@ init =
     Tepa.succeed <|
         Memory
             { items = []
+            , nextItemId = 0
             }
 
 
@@ -117,13 +119,11 @@ init =
 
   - `ClosedByUser`: Uesr clicked the close button
   - `ClosedByTimeout`: The popup was timed out
-  - `ClosedByLayer`: Layer has expired
 
 -}
 type ClosedBy
     = ClosedByUser
     | ClosedByTimeout
-    | ClosedByLayer
 
 
 
@@ -148,61 +148,31 @@ pushError =
 
 pushItem : MessageType -> String -> Promise Memory ClosedBy
 pushItem type_ str =
-    Tepa.bindAndThen
-        (Tepa.newLayer
-            { isHidden = False
-            , messageType = type_
-            , content = str
-            }
-        )
-    <|
-        \newItem ->
-            Tepa.modify
-                (\(Memory m) ->
-                    Memory { m | items = m.items ++ [ newItem ] }
-                )
+    Tepa.bindAndThen Tepa.currentState <|
+        \(Memory curr) ->
+            let
+                newItemId =
+                    curr.nextItemId
+            in
+            (Tepa.modify <|
+                \(Memory m) ->
+                    Memory
+                        { m
+                            | items =
+                                { id = newItemId
+                                , isHidden = False
+                                , messageType = type_
+                                , content = str
+                                }
+                                    :: m.items
+                            , nextItemId = m.nextItemId + 1
+                        }
+            )
                 |> Tepa.andThen
                     (\_ ->
                         toastItemProcedure
-                            |> Tepa.onLayer
-                                { getLink =
-                                    \(Memory m) ->
-                                        Just
-                                            { items = m.items
-                                            }
-                                , setLink =
-                                    \link (Memory m) ->
-                                        Memory
-                                            { m | items = link.items }
-                                , getBody =
-                                    \(Memory m) ->
-                                        List.filter (\item -> Tepa.layerIdOf item == Tepa.layerIdOf newItem) m.items
-                                            |> List.head
-                                , setBody =
-                                    \new (Memory m) ->
-                                        Memory
-                                            { m
-                                                | items =
-                                                    List.map
-                                                        (\item ->
-                                                            if Tepa.layerIdOf newItem == Tepa.layerIdOf item then
-                                                                new
-
-                                                            else
-                                                                item
-                                                        )
-                                                        m.items
-                                            }
-                                }
-                    )
-                |> Tepa.andThen
-                    (\layerResult ->
-                        case layerResult of
-                            Tepa.SucceedOnLayer closedBy ->
-                                Tepa.succeed closedBy
-
-                            _ ->
-                                Tepa.succeed ClosedByLayer
+                            { itemId = newItemId
+                            }
                     )
 
 
@@ -211,27 +181,39 @@ pushItem type_ str =
 
 
 type alias ToastItemMemory =
-    LayerMemory
-        ToastItemMemoryLink
-        ToastItemMemoryBody
-
-
-type alias ToastItemMemoryLink =
-    { items : List (Layer ToastItemMemoryBody)
-    }
-
-
-type alias ToastItemMemoryBody =
-    { isHidden : Bool
+    { id : Int
+    , isHidden : Bool
     , messageType : MessageType
     , content : String
     }
 
 
-toastItemProcedure : Promise ToastItemMemory ClosedBy
-toastItemProcedure =
+toastItemProcedure :
+    { itemId : Int
+    }
+    -> Promise Memory ClosedBy
+toastItemProcedure param =
+    let
+        modifyToastItem : (ToastItemMemory -> ToastItemMemory) -> Promise Memory ()
+        modifyToastItem f =
+            Tepa.modify <|
+                \(Memory m) ->
+                    Memory
+                        { m
+                            | items =
+                                List.map
+                                    (\item ->
+                                        if item.id == param.itemId then
+                                            f item
+
+                                        else
+                                            item
+                                    )
+                                    m.items
+                        }
+    in
     Tepa.viewEventStream
-        { key = keys.toastItemClose
+        { key = (keys { itemId = param.itemId }).toastItemClose
         , type_ = "click"
         }
         |> Tepa.andThen
@@ -248,16 +230,13 @@ toastItemProcedure =
         |> Tepa.andThen
             (\closedBy ->
                 Tepa.sequence
-                    [ Tepa.modifyBody
+                    [ modifyToastItem
                         (\m -> { m | isHidden = True })
                     , Time.sleep toastFadeOutDuration
-                    , Tepa.bind Tepa.currentLayerId <|
-                        \lid ->
-                            [ Tepa.modifyLink
-                                (\m ->
-                                    { m | items = List.filter (\item -> Tepa.layerIdOf item /= lid) m.items }
-                                )
-                            ]
+                    , Tepa.modify <|
+                        \(Memory m) ->
+                            Memory
+                                { m | items = List.filter (\item -> item.id /= param.itemId) m.items }
                     ]
                     |> Tepa.map (\_ -> closedBy)
             )
@@ -268,42 +247,55 @@ toastItemProcedure =
 
 
 {-| -}
-view : Tepa.ViewContext Memory -> Html
-view context =
+view :
+    { state : Memory
+    }
+    -> Tepa.ViewContext
+    -> Html
+view param context =
     let
         (Memory state) =
-            context.state
+            param.state
     in
     Html.keyed "div"
         [ localClass "toast"
         , Mixin.style "--zindex" <| String.fromInt ZIndex.toast
         ]
-        (List.map
-            (Tepa.layerView
-                (\vc -> ( vc.layerId, toastItemView vc ))
-            )
-            state.items
+        (List.reverse state.items
+            |> List.map
+                (\item ->
+                    ( String.fromInt item.id
+                    , toastItemView
+                        { form = item
+                        }
+                        context
+                    )
+                )
         )
 
 
-toastItemView : Tepa.ViewContext ToastItemMemoryBody -> Html
-toastItemView { state, setKey } =
+toastItemView :
+    { form : ToastItemMemory
+    }
+    -> Tepa.ViewContext
+    -> Html
+toastItemView param { setKey } =
     Html.div
         [ localClass "toast_item"
-        , localClass <| "toast_item-" ++ messageTypeCode state.messageType
+        , localClass <| "toast_item-" ++ messageTypeCode param.form.messageType
         , Mixin.attribute "role" "dialog"
-        , Mixin.boolAttribute "aria-hidden" state.isHidden
+        , Mixin.boolAttribute "aria-hidden" param.form.isHidden
         , Mixin.style "--disappearing-duration" (String.fromInt toastFadeOutDuration ++ "ms")
         ]
         [ Html.div
             [ localClass "toast_item_body"
             ]
-            [ Html.text state.content
+            [ Html.text param.form.content
             ]
         , Html.button
             [ localClass "toast_item_close"
             , Mixin.attribute "type" "button"
-            , setKey keys.toastItemClose
+            , setKey (keys { itemId = param.form.id }).toastItemClose
             ]
             [ Html.text "×"
             ]
@@ -311,10 +303,13 @@ toastItemView { state, setKey } =
 
 
 keys :
-    { toastItemClose : String
+    { itemId : Int
     }
-keys =
-    { toastItemClose = "toastItemClose"
+    ->
+        { toastItemClose : String
+        }
+keys { itemId } =
+    { toastItemClose = "toastItemClose-" ++ String.fromInt itemId
     }
 
 

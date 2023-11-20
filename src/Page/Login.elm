@@ -69,11 +69,26 @@ type alias MemoryBody =
     }
 
 
+type alias LoginFormMemory =
+    { isBusy : Bool
+    , showError : Bool
+    , incorrectIdOrPass : Bool
+    }
+
+
 {-| -}
 init : Promise m MemoryBody
 init =
     Tepa.succeed
-        { loginForm = initLoginForm
+        { loginForm =
+            { isBusy = False
+
+            -- Do not show errors initially to avoid bothering
+            -- the user with "Input required" errors
+            -- when they has not yet entered the information.
+            , showError = False
+            , incorrectIdOrPass = False
+            }
         }
 
 
@@ -90,66 +105,45 @@ leave =
 
 {-| -}
 view :
-    Flags
-    ->
-        Layer
-            { link : MemoryLink
-            , body : MemoryBody
-            }
+    { flags : Flags
+    , link : MemoryLink
+    , body : MemoryBody
+    }
+    -> ViewContext
     -> Document
-view _ =
-    Tepa.layerView <|
-        \context ->
-            { title = "Sample App | Login"
-            , body =
-                [ let
-                    bodyContext =
-                        Tepa.mapViewContext .body context
-
-                    linkContext =
-                        Tepa.mapViewContext .link context
-                  in
-                  Html.div
-                    [ localClass "page"
-                    ]
-                    [ loginFormView
-                        (Tepa.mapViewContext .loginForm bodyContext)
-                    , Toast.view
-                        (Tepa.mapViewContext .toast linkContext)
-                    ]
-                ]
-            }
+view param context =
+    { title = "Sample App | Login"
+    , body =
+        [ Html.div
+            [ localClass "page"
+            ]
+            [ loginFormView
+                { form = param.body.loginForm
+                }
+                context
+            , Toast.view
+                { state = param.link.toast
+                }
+                context
+            ]
+        ]
+    }
 
 
 
 -- -- LoginForm
 
 
-type alias LoginFormMemory =
-    { isBusy : Bool
-    , showError : Bool
-    , incorrectIdOrPass : Bool
+loginFormView :
+    { form : LoginFormMemory
     }
-
-
-initLoginForm : LoginFormMemory
-initLoginForm =
-    { isBusy = False
-
-    -- Do not show errors initially to avoid bothering
-    -- the user with "Input required" errors
-    -- when they has not yet entered the information.
-    , showError = False
-    , incorrectIdOrPass = False
-    }
-
-
-loginFormView : ViewContext LoginFormMemory -> Html
-loginFormView { state, setKey, values } =
+    -> ViewContext
+    -> Html
+loginFormView param { setKey, values } =
     let
         errors =
             List.concat
-                [ if state.incorrectIdOrPass then
+                [ if param.form.incorrectIdOrPass then
                     [ Login.IncorrectIdOrPassword
                     ]
 
@@ -161,14 +155,14 @@ loginFormView { state, setKey, values } =
         invalidOn : Login.FormError -> Mixin
         invalidOn err =
             Mixin.boolAttribute "aria-invalid"
-                (state.showError
+                (param.form.showError
                     && List.member err errors
                 )
     in
     Html.div
         [ localClass "loginForm"
         , Mixin.boolAttribute "aria-invalid"
-            (state.showError && not (List.isEmpty errors))
+            (param.form.showError && not (List.isEmpty errors))
         ]
         [ Html.div
             [ localClass "loginForm_title"
@@ -205,7 +199,7 @@ loginFormView { state, setKey, values } =
                 ]
             , Html.node "input"
                 [ Mixin.attribute "type" "text"
-                , Mixin.disabled state.isBusy
+                , Mixin.disabled param.form.isBusy
                 , localClass "loginForm_id_input"
                 , setKey Login.keys.loginFormId
                 ]
@@ -222,13 +216,13 @@ loginFormView { state, setKey, values } =
                 ]
             , Html.node "input"
                 [ Mixin.attribute "type" "password"
-                , Mixin.disabled state.isBusy
+                , Mixin.disabled param.form.isBusy
                 , localClass "loginForm_password_input"
                 , setKey Login.keys.loginFormPassword
                 ]
                 []
             ]
-        , if state.showError && List.length errors > 0 then
+        , if param.form.showError && List.length errors > 0 then
             Html.div
                 [ localClass "loginForm_errorField"
                 ]
@@ -248,11 +242,11 @@ loginFormView { state, setKey, values } =
         , Html.node "button"
             [ localClass "loginForm_loginButton"
             , Mixin.attribute "type" "button"
-            , Mixin.boolAttribute "aria-busy" state.isBusy
+            , Mixin.boolAttribute "aria-busy" param.form.isBusy
 
             -- We intentionally use the `aria-disabled` attribute here instead of the `disabled` attribute.
             -- If you use the `disabled` attribute, for example, if a user once presses the login button with an incorrect password, then corrects the password again and wants the tab key to focus on the login button, it will not focus properly.
-            , Mixin.boolAttribute "aria-disabled" <| state.showError && not (List.isEmpty errors)
+            , Mixin.boolAttribute "aria-disabled" <| param.form.showError && not (List.isEmpty errors)
             , setKey keys.loginFormLoginButton
             ]
             [ Html.text "Login"
