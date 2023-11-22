@@ -1,6 +1,7 @@
 {
     "private": true,
     "scripts": {
+        "preinstall": "cd backend && npm i",
         "format": "npm run format:elm && npm run format:assets",
         "format:elm": "elm-format src tests",
         "format:assets": "prettier --write src",
